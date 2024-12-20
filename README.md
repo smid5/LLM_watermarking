@@ -115,12 +115,3 @@ This script tests the SimHash watermarking and detection for different combinati
 - Ensure that the pretrained model (`facebook/opt-1.3b`) is downloaded correctly. Change the model name in the scripts if a different model is needed.
 - The minimum cost values (`min_cost`) are used as a key metric to evaluate the effectiveness of the watermarking scheme.
 
-## Future Improvements
-
-- Incorporate semantic similarity checks to ensure unrelated text is truly distant from watermarked content.
-- Add more sophisticated paraphrasing techniques to simulate real-world text transformations.
-- Evaluate performance with larger language models and diverse datasets.
-
-## License
-
-This project is open-source and can be used for research and educational purposes.
