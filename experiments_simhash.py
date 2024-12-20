@@ -5,28 +5,39 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from generate_simhash import generate_with_simhash, SimHashWatermark
 from detection_simhash import simhash_detect_with_permutation
 
-# Encoder function: Generates embeddings from the input text
-def simple_encoder(text, model, tokenizer):
-    """
-    Encoder function: Converts input text into embeddings using the model's last hidden state.
-    """
-    inputs = tokenizer(text, return_tensors="pt").to(model.device)
-    with torch.no_grad():
-        outputs = model(**inputs, output_hidden_states=True)
-        embeddings = outputs.hidden_states[-1].mean(dim=1).squeeze()  # Mean pooling
-    return embeddings
-
-# Function to calculate min_cost for a given text
-def calculate_min_cost(text, model, tokenizer, encoder, d, k, b, seed):
-    torch.manual_seed(seed)
-    embeddings = encoder(text, model, tokenizer)
-    # Simulate min_cost calculation (example function, replace with your implementation)
-    return embeddings.norm().item()  # Replace with actual min_cost logic
-
 # Function to generate paraphrased text (placeholder)
 def paraphrase_text(text):
     # Placeholder for paraphrasing logic
     return text.replace("a", "e")  # Simple example, replace with a real paraphrasing algorithm
+
+# Function to generate unrelated and unwatermarked text dynamically
+# def generate_unrelated_text(model, tokenizer, seed):
+#     torch.manual_seed(seed)
+#     unrelated_prompts = [
+#         "The weather today is sunny with scattered clouds.",
+#         "A quick brown fox jumps over the lazy dog.",
+#         "Exploring the deep ocean is a remarkable journey.",
+#         "Space exploration is humanity's next frontier.",
+#         "Mathematics is the language of the universe.",
+#         "Artificial intelligence is shaping the future of technology.",
+#         "Cooking recipes from different cultures is a delightful experience.",
+#         "History teaches us invaluable lessons about human behavior."
+#     ]
+#     random_prompt = unrelated_prompts[seed % len(unrelated_prompts)]
+#     prompts = tokenizer(random_prompt, return_tensors="pt").input_ids
+#     outputs = model.generate(prompts, max_length=50, num_return_sequences=1, do_sample=True, top_k=50, temperature=0.7)
+#     return tokenizer.decode(outputs[0], skip_special_tokens=True)
+def generate_unrelated_text(model, tokenizer, seed):
+    torch.manual_seed(seed)
+    random_topics = [
+        "astronomy", "cooking", "robotics", "music theory", 
+        "ancient history", "quantum mechanics", "gardening", "sports analysis"
+    ]
+    random_topic = random_topics[seed % len(random_topics)]
+    random_prompt = f"Write a brief introduction to {random_topic}."
+    prompts = tokenizer(random_prompt, return_tensors="pt").input_ids
+    outputs = model.generate(prompts, max_length=50, num_return_sequences=1, do_sample=True, top_k=50, temperature=0.7)
+    return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 # Main experiment function
 def run_experiment():
@@ -37,31 +48,133 @@ def run_experiment():
 
     # Parameters
     d = 2048  # Embedding dimensionality
-    k = 100   # Number of hash functions
+    k = 150   # Number of hash functions
     b = 30    # Bits per hash
-    seed = 42  # Seed for reproducibility
-    torch.manual_seed(seed)
+    base_seed = 42  # Base seed for reproducibility
+    vocab_size = tokenizer.vocab_size
+    n = 256   # Sampling parameter (unused here)
+    m = 50    # Number of tokens to generate
+    num_samples = 3  # Increase number of samples for better analysis
 
-    # Input text samples
-    watermarked_text = "Once upon a time, in a faraway land, a boy's heart's aching."
-    paraphrased_text = paraphrase_text(watermarked_text)
-    unrelated_text = "The quick brown fox jumps over the lazy dog."  # Unrelated and unwatermarked
+    # Input context
+    context = "Once upon a time, in a faraway land, a boy's heart's aching."
+    prompts = tokenizer(context, return_tensors="pt").input_ids
 
-    # Calculate min_cost for each case
-    min_costs = {
-        "Watermarked Text": calculate_min_cost(watermarked_text, model, tokenizer, simple_encoder, d, k, b, seed),
-        "Paraphrased Watermarked Text": calculate_min_cost(paraphrased_text, model, tokenizer, simple_encoder, d, k, b, seed),
-        "Unrelated and Unwatermarked Text": calculate_min_cost(unrelated_text, model, tokenizer, simple_encoder, d, k, b, seed),
-    }
+    # Collect min_costs for each case
+    watermarked_costs = []
+    paraphrased_costs = []
+    unrelated_costs = []
 
-    # Plot histograms
+    # Open a file to write outputs
+    with open("text_outputs.txt", "w") as output_file:
+        for i in range(num_samples):
+            # Generate a unique seed for each sample
+            seed = base_seed + i
+
+            # Generate watermarked text
+            watermarked_tokens = generate_with_simhash(
+                model=model,
+                tokenizer=tokenizer,
+                prompts=prompts,
+                vocab_size=vocab_size,
+                n=n,
+                m=m,
+                seeds=[seed],
+                k=k,
+                b=b,
+            )
+            watermarked_text = tokenizer.decode(watermarked_tokens, skip_special_tokens=True)
+            wm_p_value, _, wm_min_cost = simhash_detect_with_permutation(
+                context=context,
+                observed_token=watermarked_tokens[-1],
+                d=d,
+                k=k,
+                b=b,
+                seed=seed,
+                model=model,
+                tokenizer=tokenizer,
+                n_runs=100,
+                threshold=0.5
+            )
+            watermarked_costs.append(wm_min_cost)
+
+            # Generate paraphrased text
+            paraphrased_text = paraphrase_text(watermarked_text)
+            paraphrased_tokens = tokenizer(paraphrased_text, return_tensors="pt").input_ids[0]
+            para_p_value, _, para_min_cost = simhash_detect_with_permutation(
+                context=context,
+                observed_token=int(paraphrased_tokens[-1]),  # Ensure token is numerical ID
+                d=d,
+                k=k,
+                b=b,
+                seed=seed,
+                model=model,
+                tokenizer=tokenizer,
+                n_runs=100,
+                threshold=0.5
+            )
+            paraphrased_costs.append(para_min_cost)
+
+            # Generate unrelated and unwatermarked text
+            unrelated_text = generate_unrelated_text(model, tokenizer, seed)
+            unrelated_tokens = tokenizer(unrelated_text, return_tensors="pt").input_ids[0]
+            unrelated_p_value, _, unrelated_min_cost = simhash_detect_with_permutation(
+                context=context,
+                observed_token=int(unrelated_tokens[-1]),  # Ensure token is numerical ID
+                d=d,
+                k=k,
+                b=b,
+                seed=seed,
+                model=model,
+                tokenizer=tokenizer,
+                n_runs=100,
+                threshold=0.5
+            )
+            unrelated_costs.append(unrelated_min_cost)
+
+            # Print and write the generated texts
+            output = (
+                f"ITERATION {i + 1}\n"
+                f"Watermarked text: {watermarked_text}\n"
+                f"Paraphrased text: {paraphrased_text}\n"
+                f"Unrelated text: {unrelated_text}\n"
+                f"Watermarked Min Cost: {wm_min_cost:.4f}\n"
+                f"Paraphrased Min Cost: {para_min_cost:.4f}\n"
+                f"Unrelated Min Cost: {unrelated_min_cost:.4f}\n\n"
+            )
+            print(output)
+            output_file.write(output)
+
+    # Compute average min_costs
+    avg_watermarked = np.mean(watermarked_costs)
+    avg_paraphrased = np.mean(paraphrased_costs)
+    avg_unrelated = np.mean(unrelated_costs)
+
+    # Print the averages
+    print("Average Min Cost Values:")
+    print(f"Watermarked Text: {avg_watermarked:.4f}")
+    print(f"Paraphrased Text: {avg_paraphrased:.4f}")
+    print(f"Unrelated Text: {avg_unrelated:.4f}\n")
+
+    # Write the averages to the file
+    with open("text_outputs.txt", "a") as output_file:
+        output_file.write("Average Min Cost Values:\n")
+        output_file.write(f"Watermarked Text: {avg_watermarked:.4f}\n")
+        output_file.write(f"Paraphrased Text: {avg_paraphrased:.4f}\n")
+        output_file.write(f"Unrelated Text: {avg_unrelated:.4f}\n\n")
+
+    # Plot bar chart of average min_costs
     plt.figure(figsize=(10, 6))
-    plt.bar(min_costs.keys(), min_costs.values(), color=["blue", "green", "red"])
+    categories = ["Watermarked Text", "Paraphrased Text", "Unrelated Text"]
+    averages = [avg_watermarked, avg_paraphrased, avg_unrelated]
+    
+    plt.bar(categories, averages, color=["blue", "green", "red"])
     plt.xlabel("Text Type")
     plt.ylabel("Average Min Cost")
-    plt.title("Histograms of Average Min Cost for Different Text Types")
+    plt.title("Average Min Cost for Different Text Types")
     plt.grid(axis="y")
     plt.show()
 
 if __name__ == "__main__":
     run_experiment()
+
