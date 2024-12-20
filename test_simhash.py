@@ -8,17 +8,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from generate_simhash import generate_with_simhash, SimHashWatermark
 from detection_simhash import simhash_detect_with_permutation
 
-# Encoder function: Generates embeddings from the input text
-def simple_encoder(text, model, tokenizer):
-    """
-    Encoder function: Converts input text into embeddings using the model's last hidden state.
-    """
-    inputs = tokenizer(text, return_tensors="pt").to(model.device)
-    with torch.no_grad():
-        outputs = model(**inputs, output_hidden_states=True)
-        embeddings = outputs.hidden_states[-1].mean(dim=1).squeeze()  # Mean pooling
-    return embeddings
-
 # Main example: Text generation with watermarking and detection
 def example_with_detection():
     # Model and tokenizer setup
@@ -44,6 +33,9 @@ def example_with_detection():
     k_values = [50, 100, 150]  # Adjust as needed
     b_values = [20, 30, 40]    # Adjust as needed
 
+    # k_values = [100]
+    # b_values = [30]
+
     results = []
 
     for k in k_values:
@@ -59,7 +51,6 @@ def example_with_detection():
                 n=n,
                 m=m,
                 seeds=[seed],
-                encoder=simple_encoder,
                 k=k,
                 b=b,
             )
@@ -71,10 +62,9 @@ def example_with_detection():
 
             # Perform detection and compute p-value
             torch.manual_seed(seed)  # Ensure reproducibility
-            p_value, result = simhash_detect_with_permutation(
+            p_value, result, _ = simhash_detect_with_permutation(
                 context=context,
                 observed_token=observed_token,
-                encoder=simple_encoder,
                 d=d,
                 k=k,
                 b=b,

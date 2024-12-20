@@ -1,6 +1,16 @@
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+def simple_encoder(text, model, tokenizer):
+    """
+    Encoder function: Converts input text into embeddings using the model's last hidden state.
+    """
+    inputs = tokenizer(text, return_tensors="pt").to(model.device)
+    with torch.no_grad():
+        outputs = model(**inputs, output_hidden_states=True)
+        embeddings = outputs.hidden_states[-1].mean(dim=1).squeeze()  # Mean pooling
+    return embeddings
+
 # SimHashWatermark class for watermarking logic
 class SimHashWatermark:
     def __init__(self, d, k, b, seed):
@@ -38,7 +48,7 @@ class SimHashWatermark:
         return torch.rand(self.d, generator=generator)  # Generate uniform random vector xi
 
 # Main generation function with SimHash watermarking
-def generate_with_simhash(model, tokenizer, prompts, vocab_size, n, m, seeds, encoder, k, b):
+def generate_with_simhash(model, tokenizer, prompts, vocab_size, n, m, seeds, k, b):
     """
     Generation Algorithm: Combines SimHash with Exponential Minimum Sampling.
     Input:
@@ -51,7 +61,7 @@ def generate_with_simhash(model, tokenizer, prompts, vocab_size, n, m, seeds, en
     """
     # Step 1: Embed context into vector v in R^d
     context = tokenizer.decode(prompts[0], skip_special_tokens=True)
-    embedded_context = encoder(context, model, tokenizer)
+    embedded_context = simple_encoder(context, model, tokenizer)
 
     # Dynamically determine embedding dimensionality d
     d = embedded_context.size(-1)
@@ -94,10 +104,3 @@ def generate_with_simhash(model, tokenizer, prompts, vocab_size, n, m, seeds, en
         attn = torch.cat([attn, attn.new_ones((attn.shape[0], 1))], dim=-1)  # Update attention mask
 
     return inputs[0].cpu().numpy().tolist()  # Convert generated tokens to a list for decoding
-
-
-
-
-
-
-

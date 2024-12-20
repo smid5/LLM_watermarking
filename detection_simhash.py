@@ -1,7 +1,17 @@
 import torch
 from generate_simhash import SimHashWatermark
 
-def simhash_detect_with_permutation(context, observed_token, encoder, d, k, b, seed, model, tokenizer, n_runs=100, max_seed=100000, threshold=0.5):
+def simple_encoder(text, model, tokenizer):
+    """
+    Encoder function: Converts input text into embeddings using the model's last hidden state.
+    """
+    inputs = tokenizer(text, return_tensors="pt").to(model.device)
+    with torch.no_grad():
+        outputs = model(**inputs, output_hidden_states=True)
+        embeddings = outputs.hidden_states[-1].mean(dim=1).squeeze()  # Mean pooling
+    return embeddings
+
+def simhash_detect_with_permutation(context, observed_token, d, k, b, seed, model, tokenizer, n_runs=100, max_seed=100000, threshold=0.5):
     """
     SimHash Detection Logic with Permutation Test for p-value computation.
     Determines whether a watermark exists in the observed token.
@@ -29,7 +39,7 @@ def simhash_detect_with_permutation(context, observed_token, encoder, d, k, b, s
     watermark = SimHashWatermark(d, k, b, seed)
 
     # Step 2: Embed context using encoder into vector v in R^d
-    embedded_context = encoder(context, model, tokenizer)
+    embedded_context = simple_encoder(context, model, tokenizer)
     assert embedded_context.size(-1) == d, "Embedding size must match Gaussian vector size!"
 
     # Step 3: Compute observed test statistic
@@ -66,4 +76,4 @@ def simhash_detect_with_permutation(context, observed_token, encoder, d, k, b, s
     result = "Watermark detected" if p_value < threshold else "No watermark detected"
 
     # Return p-value and result
-    return p_value, result
+    return p_value, result, observed_result
