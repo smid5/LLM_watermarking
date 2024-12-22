@@ -47,17 +47,67 @@ class SimHashWatermark:
         generator.manual_seed(hash_value)  # Set random seed based on hash value
         return torch.rand(self.d, generator=generator)  # Generate uniform random vector xi
 
-# Main generation function with SimHash watermarking
-def generate_with_simhash(model, tokenizer, prompts, vocab_size, n, m, seeds, k, b):
+# # Main generation function with SimHash watermarking
+# def generate_with_simhash(model, tokenizer, prompts, vocab_size, n, m, seeds, k, b):
+#     """
+#     Generation Algorithm: Combines SimHash with Exponential Minimum Sampling.
+#     Input:
+#     - context (prompts): Initial text input tokens.
+#     - LLM: Language model for next token prediction.
+#     - encoder: Embeds text context into vector space.
+#     - k, b: SimHash parameters.
+#     Output:
+#     - Generated text tokens.
+#     """
+#     # Step 1: Embed context into vector v in R^d
+#     context = tokenizer.decode(prompts[0], skip_special_tokens=True)
+#     embedded_context = simple_encoder(context, model, tokenizer)
+
+#     # Dynamically determine embedding dimensionality d
+#     d = embedded_context.size(-1)
+#     watermark = SimHashWatermark(d, k, b, seeds[0])  # Initialize SimHashWatermark
+
+#     inputs = prompts.to(model.device)  # Input tokens
+#     attn = torch.ones_like(inputs)  # Attention mask for the model
+#     past = None  # Cache past key values for efficiency
+#     temperature = 0.7  # Softmax temperature for sampling
+
+#     for i in range(m):  # Generate m tokens
+#         with torch.no_grad():
+#             if past:
+#                 output = model(inputs[:, -1:], past_key_values=past, attention_mask=attn)
+#             else:
+#                 output = model(inputs)
+
+#         logits = output.logits[:, -1]  # Logits for the next token
+
+#         # Step 7: Add Gumbel noise for stochastic sampling
+#         gumbel_noise = torch.distributions.Gumbel(0, 1).sample(logits.shape).to(model.device)
+#         probs = torch.nn.functional.softmax((logits + gumbel_noise) / temperature, dim=-1)
+
+#         # Step 2: Sample ell uniformly from {1, ..., k}
+#         ell = torch.randint(0, k, (1,)).item()
+
+#         # Step 6: Generate xi ~ Unif[(0, 1)]^d using hash function hash_ell
+#         xi = watermark.sample_text_seed(embedded_context, ell)
+
+#         # Resize xi to match probs size
+#         xi_resized = torch.rand(probs.size(-1))  # Dynamically initialize xi_resized
+#         xi_resized[:min(xi.size(-1), probs.size(-1))] = xi[:min(xi.size(-1), probs.size(-1))]
+
+#         # Step 8: Exponential minimum sampling using log(xi) / probs
+#         scaled_probs = torch.log(xi_resized + 1e-9) / probs  # Logarithmic scaling
+#         next_token_id = torch.argmax(scaled_probs, dim=-1, keepdim=True)  # Select the next token
+
+#         # Append the next token to the input sequence
+#         inputs = torch.cat([inputs, next_token_id], dim=1)
+#         attn = torch.cat([attn, attn.new_ones((attn.shape[0], 1))], dim=-1)  # Update attention mask
+
+#     return inputs[0].cpu().numpy().tolist()  # Convert generated tokens to a list for decoding
+
+def generate_with_simhash(model, tokenizer, prompts, vocab_size, n, m, seeds, k, b, random_offset=True):
     """
-    Generation Algorithm: Combines SimHash with Exponential Minimum Sampling.
-    Input:
-    - context (prompts): Initial text input tokens.
-    - LLM: Language model for next token prediction.
-    - encoder: Embeds text context into vector space.
-    - k, b: SimHash parameters.
-    Output:
-    - Generated text tokens.
+    Enhanced Generation Algorithm with SimHash and Exponential Minimum Sampling.
     """
     # Step 1: Embed context into vector v in R^d
     context = tokenizer.decode(prompts[0], skip_special_tokens=True)
@@ -67,10 +117,25 @@ def generate_with_simhash(model, tokenizer, prompts, vocab_size, n, m, seeds, k,
     d = embedded_context.size(-1)
     watermark = SimHashWatermark(d, k, b, seeds[0])  # Initialize SimHashWatermark
 
-    inputs = prompts.to(model.device)  # Input tokens
-    attn = torch.ones_like(inputs)  # Attention mask for the model
-    past = None  # Cache past key values for efficiency
-    temperature = 0.7  # Softmax temperature for sampling
+    # Precompute xi and pi for all seeds
+    xis, pis = [], []
+    for seed in seeds:
+        torch.manual_seed(seed)  # Ensure reproducibility
+        xi = torch.rand(d)
+        pi = torch.ones(d) / vocab_size  # Uniform probabilities as placeholder
+        xis.append(xi.unsqueeze(0))
+        pis.append(pi.unsqueeze(0))
+    xis = torch.vstack(xis)
+    pis = torch.vstack(pis)
+
+    # Random offset for unpredictability
+    offset = torch.randint(n, size=(1,)) if random_offset else torch.zeros(1, dtype=torch.int64)
+
+    # Initialize inputs and attention mask
+    inputs = prompts.to(model.device)
+    attn = torch.ones_like(inputs)  # Attention mask
+    past = None  # For caching model's past key values
+    temperature = 0.7  # Sampling temperature
 
     for i in range(m):  # Generate m tokens
         with torch.no_grad():
@@ -79,28 +144,29 @@ def generate_with_simhash(model, tokenizer, prompts, vocab_size, n, m, seeds, k,
             else:
                 output = model(inputs)
 
-        logits = output.logits[:, -1]  # Logits for the next token
-
-        # Step 7: Add Gumbel noise for stochastic sampling
-        gumbel_noise = torch.distributions.Gumbel(0, 1).sample(logits.shape).to(model.device)
-        probs = torch.nn.functional.softmax((logits + gumbel_noise) / temperature, dim=-1)
+        # Step 7: Evaluate probability distribution p
+        logits = output.logits[:, -1]
+        probs = torch.nn.functional.softmax(logits / temperature, dim=-1)
 
         # Step 2: Sample ell uniformly from {1, ..., k}
         ell = torch.randint(0, k, (1,)).item()
 
-        # Step 6: Generate xi ~ Unif[(0, 1)]^d using hash function hash_ell
+        # Step 6: Use text_seed to sample xi
         xi = watermark.sample_text_seed(embedded_context, ell)
 
         # Resize xi to match probs size
         xi_resized = torch.rand(probs.size(-1))  # Dynamically initialize xi_resized
         xi_resized[:min(xi.size(-1), probs.size(-1))] = xi[:min(xi.size(-1), probs.size(-1))]
 
-        # Step 8: Exponential minimum sampling using log(xi) / probs
-        scaled_probs = torch.log(xi_resized + 1e-9) / probs  # Logarithmic scaling
-        next_token_id = torch.argmax(scaled_probs, dim=-1, keepdim=True)  # Select the next token
+        # Step 8: Exponential minimum sampling
+        # Exponential Minimum Sampling with Adjustable Strength
+        alpha = 1.0  # Adjust this value for stronger watermark influence
+        scaled_probs = torch.log(xi_resized + 1e-9) / (probs ** alpha)
+        next_token_id = torch.argmax(scaled_probs, dim=-1, keepdim=True)
 
         # Append the next token to the input sequence
         inputs = torch.cat([inputs, next_token_id], dim=1)
         attn = torch.cat([attn, attn.new_ones((attn.shape[0], 1))], dim=-1)  # Update attention mask
+        past = output.past_key_values  # Update cached key values
 
     return inputs[0].cpu().numpy().tolist()  # Convert generated tokens to a list for decoding

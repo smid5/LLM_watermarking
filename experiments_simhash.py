@@ -11,22 +11,6 @@ def paraphrase_text(text):
     return text.replace("a", "e")  # Simple example, replace with a real paraphrasing algorithm
 
 # Function to generate unrelated and unwatermarked text dynamically
-# def generate_unrelated_text(model, tokenizer, seed):
-#     torch.manual_seed(seed)
-#     unrelated_prompts = [
-#         "The weather today is sunny with scattered clouds.",
-#         "A quick brown fox jumps over the lazy dog.",
-#         "Exploring the deep ocean is a remarkable journey.",
-#         "Space exploration is humanity's next frontier.",
-#         "Mathematics is the language of the universe.",
-#         "Artificial intelligence is shaping the future of technology.",
-#         "Cooking recipes from different cultures is a delightful experience.",
-#         "History teaches us invaluable lessons about human behavior."
-#     ]
-#     random_prompt = unrelated_prompts[seed % len(unrelated_prompts)]
-#     prompts = tokenizer(random_prompt, return_tensors="pt").input_ids
-#     outputs = model.generate(prompts, max_length=50, num_return_sequences=1, do_sample=True, top_k=50, temperature=0.7)
-#     return tokenizer.decode(outputs[0], skip_special_tokens=True)
 def generate_unrelated_text(model, tokenizer, seed):
     torch.manual_seed(seed)
     random_topics = [
@@ -54,11 +38,10 @@ def run_experiment():
     vocab_size = tokenizer.vocab_size
     n = 256   # Sampling parameter (unused here)
     m = 50    # Number of tokens to generate
-    num_samples = 3  # Increase number of samples for better analysis
+    num_samples = 1  # Increase number of samples for better analysis
 
-    # Input context
-    context = "Once upon a time, in a faraway land, a boy's heart's aching."
-    prompts = tokenizer(context, return_tensors="pt").input_ids
+    # Generate initial tokens (starting from an empty prompt)
+    prompts = tokenizer("", return_tensors="pt").input_ids  # Empty context to start generation
 
     # Collect min_costs for each case
     watermarked_costs = []
@@ -85,7 +68,7 @@ def run_experiment():
             )
             watermarked_text = tokenizer.decode(watermarked_tokens, skip_special_tokens=True)
             wm_p_value, _, wm_min_cost = simhash_detect_with_permutation(
-                context=context,
+                context=tokenizer.decode(watermarked_tokens[:-1], skip_special_tokens=True),  # Use all tokens except the last one as context
                 observed_token=watermarked_tokens[-1],
                 d=d,
                 k=k,
@@ -102,7 +85,7 @@ def run_experiment():
             paraphrased_text = paraphrase_text(watermarked_text)
             paraphrased_tokens = tokenizer(paraphrased_text, return_tensors="pt").input_ids[0]
             para_p_value, _, para_min_cost = simhash_detect_with_permutation(
-                context=context,
+                context=tokenizer.decode(watermarked_tokens[:-1], skip_special_tokens=True),
                 observed_token=int(paraphrased_tokens[-1]),  # Ensure token is numerical ID
                 d=d,
                 k=k,
@@ -119,7 +102,7 @@ def run_experiment():
             unrelated_text = generate_unrelated_text(model, tokenizer, seed)
             unrelated_tokens = tokenizer(unrelated_text, return_tensors="pt").input_ids[0]
             unrelated_p_value, _, unrelated_min_cost = simhash_detect_with_permutation(
-                context=context,
+                context=tokenizer.decode(watermarked_tokens[:-1], skip_special_tokens=True),
                 observed_token=int(unrelated_tokens[-1]),  # Ensure token is numerical ID
                 d=d,
                 k=k,
@@ -177,4 +160,3 @@ def run_experiment():
 
 if __name__ == "__main__":
     run_experiment()
-
