@@ -32,7 +32,7 @@ def insertion_attack(tokens, p, vocab_size, distribution=None):
     return tokens
 
 def evaluate_by_paraphrasing_intensity(
-    model, tokenizer, d, k, b, n, m, seed, num_samples, intensities, attack_type="substitution"
+    model, tokenizer, k, b, n, m, seed, num_samples, intensities, attack_type="substitution"
 ):
     performance_by_intensity = []
 
@@ -78,7 +78,7 @@ def evaluate_by_paraphrasing_intensity(
             para_p_value, para_result, _ = simhash_detect_with_permutation(
                 context=tokenizer.decode(watermarked_tokens[:-1], skip_special_tokens=True),
                 observed_token=int(paraphrased_tokens_tensor[-1]),
-                d=d,
+                vocab_size=tokenizer.vocab_size,  # Add vocab_size
                 k=k,
                 b=b,
                 seed=sample_seed,
@@ -115,7 +115,6 @@ def run_experiment():
     model = AutoModelForCausalLM.from_pretrained(model_name)
 
     # Parameters
-    d = 2048
     n = 256
     m = 50
     base_seed = 42
@@ -130,7 +129,7 @@ def run_experiment():
 
     # Evaluate detection performance by paraphrasing intensity
     performance = evaluate_by_paraphrasing_intensity(
-        model, tokenizer, d, k, b, n, m, base_seed, num_samples, paraphrasing_intensities, attack_type="substitution"
+        model, tokenizer, k, b, n, m, base_seed, num_samples, paraphrasing_intensities, attack_type="substitution"
     )
 
     # Plot performance
@@ -138,5 +137,3 @@ def run_experiment():
 
 if __name__ == "__main__":
     run_experiment()
-
-

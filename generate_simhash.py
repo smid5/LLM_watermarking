@@ -13,16 +13,17 @@ def simple_encoder(text, model, tokenizer):
 
 # SimHashWatermark class for watermarking logic
 class SimHashWatermark:
-    def __init__(self, d, k, b, seed):
+    def __init__(self, d, vocab_size, k, b, seed):
         """
         Initialization: Precompute Gaussian vectors.
         Step 3: Use (seed, ell) to sample b Gaussian vectors r_1, ..., r_b in R^d.
         """
         self.d = d  # Dimensionality of the embedding space
+        self.vocab_size = vocab_size  # Vocabulary size
         self.k = k  # Number of hash functions
         self.b = b  # Number of bits per hash
         self.seed = seed  # Seed for reproducibility
-        
+
         torch.manual_seed(seed)  # Set random seed for reproducibility
         self.gaussian_vectors = [torch.randn(d) for _ in range(k * b)]  # Pre-generate Gaussian vectors
 
@@ -39,13 +40,13 @@ class SimHashWatermark:
 
     def sample_text_seed(self, vector, ell):
         """
-        Step 6: Use text_seed to sample xi ~ Unif[(0, 1)]^d.
+        Step 6: Use text_seed to sample xi ~ Unif[(0, 1)]^vocab_size.
         - Deterministically generate xi using hash value as the seed.
         """
         hash_value = self.hash_function(vector, ell)  # Compute hash value
         generator = torch.Generator()
         generator.manual_seed(hash_value)  # Set random seed based on hash value
-        return torch.rand(self.d, generator=generator)  # Generate uniform random vector xi
+        return torch.rand(self.vocab_size, generator=generator)  # Generate uniform random vector xi
 
 def generate_with_simhash(model, tokenizer, prompts, vocab_size, n, m, seeds, k, b, random_offset=True):
     """
@@ -57,18 +58,7 @@ def generate_with_simhash(model, tokenizer, prompts, vocab_size, n, m, seeds, k,
 
     # Dynamically determine embedding dimensionality d
     d = embedded_context.size(-1)
-    watermark = SimHashWatermark(d, k, b, seeds[0])  # Initialize SimHashWatermark
-
-    # Precompute xi and pi for all seeds
-    xis, pis = [], []
-    for seed in seeds:
-        torch.manual_seed(seed)  # Ensure reproducibility
-        xi = torch.rand(d)
-        pi = torch.ones(d) / vocab_size  # Uniform probabilities as placeholder
-        xis.append(xi.unsqueeze(0))
-        pis.append(pi.unsqueeze(0))
-    xis = torch.vstack(xis)
-    pis = torch.vstack(pis)
+    watermark = SimHashWatermark(d, vocab_size, k, b, seeds[0])  # Initialize SimHashWatermark
 
     # Random offset for unpredictability
     offset = torch.randint(n, size=(1,)) if random_offset else torch.zeros(1, dtype=torch.int64)
@@ -96,14 +86,15 @@ def generate_with_simhash(model, tokenizer, prompts, vocab_size, n, m, seeds, k,
         # Step 6: Use text_seed to sample xi
         xi = watermark.sample_text_seed(embedded_context, ell)
 
-        # Resize xi to match probs size
-        xi_resized = torch.rand(probs.size(-1))  # Dynamically initialize xi_resized
-        xi_resized[:min(xi.size(-1), probs.size(-1))] = xi[:min(xi.size(-1), probs.size(-1))]
+        # Ensure xi matches the size of probs
+        if xi.size(0) != probs.size(-1):
+            xi = xi[:probs.size(-1)]  # Trim xi if larger
+            xi = torch.nn.functional.pad(xi, (0, probs.size(-1) - xi.size(0)))  # Pad xi if smaller
 
         # Step 8: Exponential minimum sampling
         # Exponential Minimum Sampling with Adjustable Strength
-        alpha = 1.0  # Adjust this value for stronger watermark influence
-        scaled_probs = torch.log(xi_resized + 1e-9) / (probs ** alpha)
+        alpha = 1.5  # Adjust this value for stronger watermark influence
+        scaled_probs = torch.log(xi + 1e-9) / (probs ** alpha)
         next_token_id = torch.argmax(scaled_probs, dim=-1, keepdim=True)
 
         # Append the next token to the input sequence

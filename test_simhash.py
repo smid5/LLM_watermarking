@@ -13,7 +13,6 @@ def example_with_detection():
     model = AutoModelForCausalLM.from_pretrained(model_name)
 
     # Parameters
-    d = 2048  # Embedding dimensionality
     seed = 42  # Seed for reproducibility
     vocab_size = tokenizer.vocab_size
     n = 256   # Sampling parameter (unused here)
@@ -26,8 +25,10 @@ def example_with_detection():
     prompts = tokenizer("", return_tensors="pt").input_ids  # Empty context to start generation
 
     # Ranges for k and b
-    k_values = [150, 180, 200]  # Number of hash functions
-    b_values = [30, 40, 50, 60]             # Bits per hash
+    k_values = [100, 150, 180, 200]  # Number of hash functions
+    b_values = [20, 30, 40, 50]             # Bits per hash
+    # k_values = [150]
+    # b_values = [30]
 
     results = []
 
@@ -58,7 +59,7 @@ def example_with_detection():
             p_value, result, _ = simhash_detect_with_permutation(
                 context=tokenizer.decode(generated_tokens[:-1], skip_special_tokens=True),  # Use all tokens except the last one as context
                 observed_token=observed_token,
-                d=d,
+                vocab_size=vocab_size,
                 k=k,
                 b=b,
                 seed=seed,

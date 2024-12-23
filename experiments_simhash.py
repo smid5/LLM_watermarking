@@ -31,7 +31,6 @@ def run_experiment():
     model = AutoModelForCausalLM.from_pretrained(model_name)
 
     # Parameters
-    d = 2048  # Embedding dimensionality
     k = 150   # Number of hash functions
     b = 30    # Bits per hash
     base_seed = 42  # Base seed for reproducibility
@@ -70,7 +69,7 @@ def run_experiment():
             wm_p_value, _, wm_min_cost = simhash_detect_with_permutation(
                 context=tokenizer.decode(watermarked_tokens[:-1], skip_special_tokens=True),  # Use all tokens except the last one as context
                 observed_token=watermarked_tokens[-1],
-                d=d,
+                vocab_size=vocab_size,
                 k=k,
                 b=b,
                 seed=seed,
@@ -87,7 +86,7 @@ def run_experiment():
             para_p_value, _, para_min_cost = simhash_detect_with_permutation(
                 context=tokenizer.decode(watermarked_tokens[:-1], skip_special_tokens=True),
                 observed_token=int(paraphrased_tokens[-1]),  # Ensure token is numerical ID
-                d=d,
+                vocab_size=vocab_size,
                 k=k,
                 b=b,
                 seed=seed,
@@ -104,7 +103,7 @@ def run_experiment():
             unrelated_p_value, _, unrelated_min_cost = simhash_detect_with_permutation(
                 context=tokenizer.decode(watermarked_tokens[:-1], skip_special_tokens=True),
                 observed_token=int(unrelated_tokens[-1]),  # Ensure token is numerical ID
-                d=d,
+                vocab_size=vocab_size,
                 k=k,
                 b=b,
                 seed=seed,

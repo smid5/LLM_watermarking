@@ -1,5 +1,7 @@
 import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from generate_simhash import SimHashWatermark
+
 
 def simple_encoder(text, model, tokenizer):
     """
@@ -11,7 +13,7 @@ def simple_encoder(text, model, tokenizer):
         embeddings = outputs.hidden_states[-1].mean(dim=1).squeeze()  # Mean pooling
     return embeddings
 
-def simhash_detect_with_permutation(context, observed_token, d, k, b, seed, model, tokenizer, n_runs=100, max_seed=100000, threshold=0.1):
+def simhash_detect_with_permutation(context, observed_token, vocab_size, k, b, seed, model, tokenizer, n_runs=100, max_seed=100000, threshold=0.1):
     """
     SimHash Detection Logic with Permutation Test for p-value computation.
     Determines whether a watermark exists in the observed token.
@@ -19,7 +21,7 @@ def simhash_detect_with_permutation(context, observed_token, d, k, b, seed, mode
     Inputs:
     - context: Available tokens (text context).
     - observed_token: The next token being analyzed for the watermark.
-    - d: Dimensionality of the embedding space.
+    - vocab_size: Size of the vocabulary.
     - k: Number of hash functions.
     - b: Number of bits for the hash.
     - seed: Seed for consistent random sampling.
@@ -34,7 +36,17 @@ def simhash_detect_with_permutation(context, observed_token, d, k, b, seed, mode
     - result: "Watermark detected" or "No watermark detected" based on threshold.
     """
     # Step 1: Create SimHashWatermark instance
-    watermark = SimHashWatermark(d, k, b, seed)
+    d = simple_encoder(context, model, tokenizer).size(-1)  # Determine embedding size dynamically
+    watermark = SimHashWatermark(d, vocab_size, k, b, seed)
+    
+    # Print and compare sizes
+    print(f"Embedding size (d): {d}")
+    print(f"Watermark dimensionality: {watermark.d}")
+    print(f"Vocabulary size: {watermark.vocab_size}")
+
+    # Optional: Add an assertion to ensure sizes match expectations
+    assert watermark.d == d, "Mismatch between embedding size and watermark dimensionality!"
+    assert watermark.vocab_size == vocab_size, "Mismatch between vocabulary sizes!"
 
     # Step 2: Embed context into vector v in R^d
     embedded_context = simple_encoder(context, model, tokenizer)
@@ -48,8 +60,7 @@ def simhash_detect_with_permutation(context, observed_token, d, k, b, seed, mode
         min_cost = float("inf")
         for ell in range(k):
             xi = watermark.sample_text_seed(embedded_context, ell)
-            token_index = token % d  # Ensure token index is within bounds
-            xi_i = xi[token_index]
+            xi_i = xi[token]  # Use token directly as index
             cost = -torch.log(1 - xi_i + 1e-9)
             min_cost = min(min_cost, cost.item())
         return min_cost

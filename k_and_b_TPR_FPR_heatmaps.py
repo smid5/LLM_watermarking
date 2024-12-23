@@ -11,20 +11,13 @@ def paraphrase_text(text):
 
 # Function to generate unrelated and unwatermarked text dynamically
 def generate_unrelated_text(model, tokenizer, m, seed):
-    """
-    Generates unrelated text starting from an empty context.
-    - model: Pretrained language model.
-    - tokenizer: Tokenizer corresponding to the model.
-    - m: Number of tokens to generate.
-    - seed: Random seed for reproducibility.
-    """
     torch.manual_seed(seed)
     prompts = tokenizer("", return_tensors="pt").input_ids  # Start with an empty prompt
     outputs = model.generate(prompts, max_length=m, num_return_sequences=1, do_sample=True, top_k=50, temperature=0.7)
     return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-# Function to calculate TPR and FPR
-def evaluate_detection(model, tokenizer, d, k_values, b_values, n, m, seed, threshold=0.5, num_samples=5):
+# Function to evaluate detection performance
+def evaluate_detection(model, tokenizer, k_values, b_values, n, m, seed, threshold=0.5, num_samples=5):
     tpr_results = np.zeros((len(k_values), len(b_values)))
     fpr_results = np.zeros((len(k_values), len(b_values)))
 
@@ -53,7 +46,7 @@ def evaluate_detection(model, tokenizer, d, k_values, b_values, n, m, seed, thre
                 wm_p_value, wm_result, _ = simhash_detect_with_permutation(
                     context=tokenizer.decode(watermarked_tokens[:-1], skip_special_tokens=True),
                     observed_token=watermarked_tokens[-1],
-                    d=d,
+                    vocab_size=tokenizer.vocab_size,  # Add vocab_size
                     k=k,
                     b=b,
                     seed=sample_seed,
@@ -72,7 +65,7 @@ def evaluate_detection(model, tokenizer, d, k_values, b_values, n, m, seed, thre
                 para_p_value, para_result, _ = simhash_detect_with_permutation(
                     context=tokenizer.decode(watermarked_tokens[:-1], skip_special_tokens=True),
                     observed_token=int(paraphrased_tokens[-1]),
-                    d=d,
+                    vocab_size=tokenizer.vocab_size,  # Add vocab_size
                     k=k,
                     b=b,
                     seed=sample_seed,
@@ -90,7 +83,7 @@ def evaluate_detection(model, tokenizer, d, k_values, b_values, n, m, seed, thre
                 unrelated_p_value, unrelated_result, _ = simhash_detect_with_permutation(
                     context=tokenizer.decode(watermarked_tokens[:-1], skip_special_tokens=True),
                     observed_token=int(unrelated_tokens[-1]),
-                    d=d,
+                    vocab_size=tokenizer.vocab_size,  # Add vocab_size
                     k=k,
                     b=b,
                     seed=sample_seed,
@@ -128,7 +121,6 @@ def run_experiment():
     model = AutoModelForCausalLM.from_pretrained(model_name)
 
     # Parameters
-    d = 2048
     n = 256
     m = 50
     base_seed = 42
@@ -141,7 +133,7 @@ def run_experiment():
 
     # Evaluate detection
     tpr_results, fpr_results = evaluate_detection(
-        model, tokenizer, d, k_values, b_values, n, m, base_seed, threshold, num_samples
+        model, tokenizer, k_values, b_values, n, m, base_seed, threshold, num_samples
     )
 
     # Plot heatmaps
@@ -150,4 +142,3 @@ def run_experiment():
 
 if __name__ == "__main__":
     run_experiment()
-
