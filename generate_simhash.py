@@ -67,7 +67,11 @@ def generate_with_simhash(model, tokenizer, prompts, vocab_size, n, m, seeds, k,
     inputs = prompts.to(model.device)
     attn = torch.ones_like(inputs)  # Attention mask
     past = None  # For caching model's past key values
-    temperature = 0.7  # Sampling temperature
+    initial_temperature = 1.0  # Start with higher temperature
+    temperature_decay = 0.95  # Gradually reduce temperature
+
+    diversity_penalty = torch.ones(vocab_size, device=model.device)  # Initialize diversity penalty
+    token_history = torch.zeros(vocab_size, device=model.device)  # Track token frequencies
 
     for i in range(m):  # Generate m tokens
         with torch.no_grad():
@@ -76,9 +80,28 @@ def generate_with_simhash(model, tokenizer, prompts, vocab_size, n, m, seeds, k,
             else:
                 output = model(inputs)
 
-        # Step 7: Evaluate probability distribution p
         logits = output.logits[:, -1]
+
+        # Dynamically adjust temperature
+        temperature = max(0.7, initial_temperature * (temperature_decay ** i))
         probs = torch.nn.functional.softmax(logits / temperature, dim=-1)
+
+        # Calculate entropy to adjust diversity penalty scaling
+        entropy = -torch.sum(probs * torch.log(probs + 1e-9)).item()
+        entropy_factor = max(0.5, 1 - entropy / torch.log(torch.tensor(probs.size(-1), device=model.device)))
+
+        # Adjust diversity_penalty to match probs size
+        if diversity_penalty.size(0) != probs.size(-1):
+            diversity_penalty = torch.ones(probs.size(-1), device=model.device)  # Reinitialize
+            token_history = torch.zeros(probs.size(-1), device=model.device)  # Reinitialize token history
+
+        # Apply history-aware penalty to diversify tokens
+        history_penalty = torch.exp(-token_history / (i + 1))  # Decay based on token reuse
+        penalized_probs = (probs / diversity_penalty) * history_penalty
+        penalized_probs = penalized_probs / penalized_probs.sum()  # Renormalize
+
+        # Blend penalized and original probabilities
+        blended_probs = 0.7 * penalized_probs + 0.3 * probs
 
         # Step 2: Sample ell uniformly from {1, ..., k}
         ell = torch.randint(0, k, (1,)).item()
@@ -87,15 +110,20 @@ def generate_with_simhash(model, tokenizer, prompts, vocab_size, n, m, seeds, k,
         xi = watermark.sample_text_seed(embedded_context, ell)
 
         # Ensure xi matches the size of probs
-        if xi.size(0) != probs.size(-1):
-            xi = xi[:probs.size(-1)]  # Trim xi if larger
-            xi = torch.nn.functional.pad(xi, (0, probs.size(-1) - xi.size(0)))  # Pad xi if smaller
+        if xi.size(0) != blended_probs.size(-1):
+            xi = xi[:blended_probs.size(-1)]  # Trim xi if larger
+            xi = torch.nn.functional.pad(xi, (0, blended_probs.size(-1) - xi.size(0)))  # Pad xi if smaller
 
         # Step 8: Exponential minimum sampling
-        # Exponential Minimum Sampling with Adjustable Strength
-        alpha = 1.5  # Adjust this value for stronger watermark influence
-        scaled_probs = torch.log(xi + 1e-9) / (probs ** alpha)
+        alpha = 1.2  # Lower alpha for balanced watermark influence
+        scaled_probs = torch.log(xi + 1e-9) / (blended_probs ** alpha)
+
+        # Select the next token
         next_token_id = torch.argmax(scaled_probs, dim=-1, keepdim=True)
+
+        # Update diversity penalty and token history
+        diversity_penalty[next_token_id] += 1  # Penalize selected token
+        token_history[next_token_id] += 1  # Track token usage
 
         # Append the next token to the input sequence
         inputs = torch.cat([inputs, next_token_id], dim=1)

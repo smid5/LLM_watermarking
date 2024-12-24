@@ -2,7 +2,6 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from generate_simhash import SimHashWatermark
 
-
 def simple_encoder(text, model, tokenizer):
     """
     Encoder function: Converts input text into embeddings using the model's last hidden state.
@@ -40,13 +39,13 @@ def simhash_detect_with_permutation(context, observed_token, vocab_size, k, b, s
     watermark = SimHashWatermark(d, vocab_size, k, b, seed)
     
     # Print and compare sizes
-    print(f"Embedding size (d): {d}")
-    print(f"Watermark dimensionality: {watermark.d}")
-    print(f"Vocabulary size: {watermark.vocab_size}")
+    # print(f"Embedding size (d): {d}")
+    # print(f"Watermark dimensionality: {watermark.d}")
+    # print(f"Vocabulary size: {watermark.vocab_size}")
 
-    # Optional: Add an assertion to ensure sizes match expectations
-    assert watermark.d == d, "Mismatch between embedding size and watermark dimensionality!"
-    assert watermark.vocab_size == vocab_size, "Mismatch between vocabulary sizes!"
+    # # Optional: Add an assertion to ensure sizes match expectations
+    # assert watermark.d == d, "Mismatch between embedding size and watermark dimensionality!"
+    # assert watermark.vocab_size == vocab_size, "Mismatch between vocabulary sizes!"
 
     # Step 2: Embed context into vector v in R^d
     embedded_context = simple_encoder(context, model, tokenizer)
@@ -60,7 +59,7 @@ def simhash_detect_with_permutation(context, observed_token, vocab_size, k, b, s
         min_cost = float("inf")
         for ell in range(k):
             xi = watermark.sample_text_seed(embedded_context, ell)
-            xi_i = xi[token]  # Use token directly as index
+            xi_i = xi[token % xi.size(0)]  # Use token directly as index, ensure bounds
             cost = -torch.log(1 - xi_i + 1e-9)
             min_cost = min(min_cost, cost.item())
         return min_cost

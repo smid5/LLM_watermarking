@@ -5,22 +5,48 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from generate_simhash import generate_with_simhash, SimHashWatermark
 from detection_simhash import simhash_detect_with_permutation
 
-# Function to generate paraphrased text (placeholder)
-def paraphrase_text(text):
-    # Placeholder for paraphrasing logic
-    return text.replace("a", "e")  # Simple example, replace with a real paraphrasing algorithm
+# Advanced paraphrasing methods
+def substitution_attack(tokens, p, vocab_size, distribution=None):
+    if distribution is None:
+        distribution = lambda x: torch.ones(size=(len(tokens), vocab_size)) / vocab_size
+    idx = torch.randperm(len(tokens))[:int(p * len(tokens))]
+    new_probs = distribution(tokens)
+    samples = torch.multinomial(new_probs, 1).flatten()
+    tokens[idx] = samples[idx]
+    return tokens
+
+def deletion_attack(tokens, p):
+    idx = torch.randperm(len(tokens))[:int(p * len(tokens))]
+    keep = torch.ones(len(tokens), dtype=torch.bool)
+    keep[idx] = False
+    tokens = tokens[keep]
+    return tokens
+
+def insertion_attack(tokens, p, vocab_size, distribution=None):
+    if distribution is None:
+        distribution = lambda x: torch.ones(size=(len(tokens), vocab_size)) / vocab_size
+    idx = torch.randperm(len(tokens))[:int(p * len(tokens))]
+    new_probs = distribution(tokens)
+    samples = torch.multinomial(new_probs, 1)
+    for i in idx.sort(descending=True).values:
+        tokens = torch.cat([tokens[:i], samples[i], tokens[i:]])
+    return tokens
+
+def paraphrase_text(tokens, attack_type="substitution", intensity=0.1, vocab_size=None):
+    if attack_type == "substitution":
+        return substitution_attack(tokens.clone(), intensity, vocab_size)
+    elif attack_type == "deletion":
+        return deletion_attack(tokens.clone(), intensity)
+    elif attack_type == "insertion":
+        return insertion_attack(tokens.clone(), intensity, vocab_size)
+    else:
+        raise ValueError(f"Unsupported attack type: {attack_type}")
 
 # Function to generate unrelated and unwatermarked text dynamically
-def generate_unrelated_text(model, tokenizer, seed):
+def generate_unrelated_text(model, tokenizer, m, seed):
     torch.manual_seed(seed)
-    random_topics = [
-        "astronomy", "cooking", "robotics", "music theory", 
-        "ancient history", "quantum mechanics", "gardening", "sports analysis"
-    ]
-    random_topic = random_topics[seed % len(random_topics)]
-    random_prompt = f"Write a brief introduction to {random_topic}."
-    prompts = tokenizer(random_prompt, return_tensors="pt").input_ids
-    outputs = model.generate(prompts, max_length=50, num_return_sequences=1, do_sample=True, top_k=50, temperature=0.7)
+    prompts = tokenizer("", return_tensors="pt").input_ids  # Start with an empty prompt
+    outputs = model.generate(prompts, max_length=m, num_return_sequences=1, do_sample=True, top_k=50, temperature=0.7)
     return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 # Main experiment function
@@ -81,7 +107,9 @@ def run_experiment():
             watermarked_costs.append(wm_min_cost)
 
             # Generate paraphrased text
-            paraphrased_text = paraphrase_text(watermarked_text)
+            watermarked_tokens_tensor = torch.tensor(watermarked_tokens, dtype=torch.long)
+            paraphrased_tokens = paraphrase_text(watermarked_tokens_tensor, attack_type="substitution", intensity=0.3, vocab_size=vocab_size)
+            paraphrased_text = tokenizer.decode(paraphrased_tokens, skip_special_tokens=True)
             paraphrased_tokens = tokenizer(paraphrased_text, return_tensors="pt").input_ids[0]
             para_p_value, _, para_min_cost = simhash_detect_with_permutation(
                 context=tokenizer.decode(watermarked_tokens[:-1], skip_special_tokens=True),
@@ -98,7 +126,7 @@ def run_experiment():
             paraphrased_costs.append(para_min_cost)
 
             # Generate unrelated and unwatermarked text
-            unrelated_text = generate_unrelated_text(model, tokenizer, seed)
+            unrelated_text = generate_unrelated_text(model, tokenizer, m, seed)
             unrelated_tokens = tokenizer(unrelated_text, return_tensors="pt").input_ids[0]
             unrelated_p_value, _, unrelated_min_cost = simhash_detect_with_permutation(
                 context=tokenizer.decode(watermarked_tokens[:-1], skip_special_tokens=True),
