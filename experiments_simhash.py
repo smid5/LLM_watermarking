@@ -46,10 +46,87 @@ def paraphrase_text(tokens, attack_type="substitution", intensity=0.1, vocab_siz
 def generate_unrelated_text(model, tokenizer, m, seed):
     torch.manual_seed(seed)
     prompts = tokenizer("", return_tensors="pt").input_ids  # Start with an empty prompt
-    outputs = model.generate(prompts, max_length=m, num_return_sequences=1, do_sample=True, top_k=50, temperature=0.7)
+    outputs = model.generate(prompts, max_length=m, num_return_sequences=1, do_sample=True, top_k=50, temperature=1.5)
     return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-# Main experiment function
+# Function to analyze token probability distributions
+# def plot_token_probabilities(tokens, model, tokenizer):
+#     for token in tokens:
+#         with torch.no_grad():
+#             logits = model(torch.tensor([token]).unsqueeze(0)).logits
+#             probs = torch.softmax(logits[0, -1], dim=-1)
+#             plt.hist(probs.cpu().numpy(), bins=50, alpha=0.7)
+#             plt.title("Token Probability Distribution")
+#             plt.xlabel("Probability")
+#             plt.ylabel("Frequency")
+#             plt.show()
+
+# Function to compare xi value distributions
+def plot_xi_distributions(watermarked_xis, paraphrased_xis, unrelated_xis):
+    plt.hist(watermarked_xis, bins=50, alpha=0.7, label="Watermarked", color="blue")
+    plt.hist(paraphrased_xis, bins=50, alpha=0.7, label="Paraphrased", color="red")
+    plt.hist(unrelated_xis, bins=50, alpha=0.7, label="Unrelated", color="yellow")
+    plt.legend()
+    plt.title("Distribution of xi Values")
+    plt.xlabel("xi Value")
+    plt.ylabel("Frequency")
+
+    plt.savefig("Image_outputs/Distribution of xi Values.png")
+    plt.show()
+
+# Function to analyze substitution attack's effect on token probabilities
+def analyze_substitution_effect(original_tokens, paraphrased_tokens, model, tokenizer):
+    replaced_indices = (original_tokens != paraphrased_tokens).nonzero(as_tuple=True)[0]
+    original_probs = []
+    new_probs = []
+
+    for idx in replaced_indices:
+        with torch.no_grad():
+            logits = model(original_tokens.unsqueeze(0)).logits
+            probs = torch.softmax(logits[0, idx], dim=-1)
+            original_probs.append(probs[original_tokens[idx]].item())
+            new_probs.append(probs[paraphrased_tokens[idx]].item())
+
+    plt.scatter(original_probs, new_probs, alpha=0.7)
+    plt.xlabel("Original Token Probability")
+    plt.ylabel("Replaced Token Probability")
+    plt.title("Effect of Substitution on Token Probabilities")
+
+    plt.savefig("Image_outputs/Effect of Substitution on Token Probabilities")
+    plt.show()
+
+# Function to analyze and plot token probability distributions
+def plot_token_probabilities(tokens, model, tokenizer, label):
+    """
+    Plots the token probability distribution for a given set of tokens.
+    
+    Args:
+        tokens (list): List of tokens to analyze.
+        model: Pretrained language model.
+        tokenizer: Tokenizer associated with the language model.
+        label (str): Label for the plot (e.g., "Watermarked", "Paraphrased").
+    """
+    probabilities = []
+    for token in tokens:
+        with torch.no_grad():
+            logits = model(torch.tensor(tokens).unsqueeze(0)).logits
+            probs = torch.softmax(logits[0, -1], dim=-1)  # Probabilities for the last token
+            probabilities.append(probs[token].item())  # Extract probability for the given token
+
+    plt.figure(figsize=(10, 6))
+    plt.hist(probabilities, bins=50, alpha=0.7, label=label, color="blue" if label == "Watermarked" else "green" if label == "Paraphrased" else "red")
+    title = f"Token Probability Distribution: {label}"
+    plt.title(f"Token Probability Distribution: {label}")
+    plt.xlabel("Probability")
+    plt.ylabel("Frequency")
+    plt.legend()
+    plt.grid(axis="y")
+
+    plt.savefig("Image_outputs/"+ str(title) + ".png")
+
+    plt.show()
+
+# Updated main experiment function
 def run_experiment():
     # Model and tokenizer setup
     model_name = "facebook/opt-1.3b"
@@ -73,6 +150,11 @@ def run_experiment():
     paraphrased_costs = []
     unrelated_costs = []
 
+    # Helper lists for xi analysis
+    watermarked_xis = []
+    paraphrased_xis = []
+    unrelated_xis = []
+
     # Open a file to write outputs
     with open("text_outputs.txt", "w") as output_file:
         for i in range(num_samples):
@@ -92,8 +174,11 @@ def run_experiment():
                 b=b,
             )
             watermarked_text = tokenizer.decode(watermarked_tokens, skip_special_tokens=True)
+
+            # Collect xi values for watermarked text
+            watermarked_xis.extend(watermarked_tokens)
             wm_p_value, _, wm_min_cost = simhash_detect_with_permutation(
-                context=tokenizer.decode(watermarked_tokens[:-1], skip_special_tokens=True),  # Use all tokens except the last one as context
+                context=tokenizer.decode(watermarked_tokens[:-1], skip_special_tokens=True),
                 observed_token=watermarked_tokens[-1],
                 vocab_size=vocab_size,
                 k=k,
@@ -106,14 +191,19 @@ def run_experiment():
             )
             watermarked_costs.append(wm_min_cost)
 
+            # Plot token probabilities for watermarked text
+            plot_token_probabilities(watermarked_tokens, model, tokenizer, "Watermarked")
+
             # Generate paraphrased text
             watermarked_tokens_tensor = torch.tensor(watermarked_tokens, dtype=torch.long)
             paraphrased_tokens = paraphrase_text(watermarked_tokens_tensor, attack_type="substitution", intensity=0.3, vocab_size=vocab_size)
             paraphrased_text = tokenizer.decode(paraphrased_tokens, skip_special_tokens=True)
-            paraphrased_tokens = tokenizer(paraphrased_text, return_tensors="pt").input_ids[0]
+
+            # Collect xi values for paraphrased text
+            paraphrased_xis.extend(paraphrased_tokens)
             para_p_value, _, para_min_cost = simhash_detect_with_permutation(
                 context=tokenizer.decode(watermarked_tokens[:-1], skip_special_tokens=True),
-                observed_token=int(paraphrased_tokens[-1]),  # Ensure token is numerical ID
+                observed_token=int(paraphrased_tokens[-1]),
                 vocab_size=vocab_size,
                 k=k,
                 b=b,
@@ -125,12 +215,18 @@ def run_experiment():
             )
             paraphrased_costs.append(para_min_cost)
 
+            # Plot token probabilities for paraphrased text
+            plot_token_probabilities(paraphrased_tokens, model, tokenizer, "Paraphrased")
+
             # Generate unrelated and unwatermarked text
             unrelated_text = generate_unrelated_text(model, tokenizer, m, seed)
             unrelated_tokens = tokenizer(unrelated_text, return_tensors="pt").input_ids[0]
+
+            # Collect xi values for unrelated text
+            unrelated_xis.extend(unrelated_tokens)
             unrelated_p_value, _, unrelated_min_cost = simhash_detect_with_permutation(
                 context=tokenizer.decode(watermarked_tokens[:-1], skip_special_tokens=True),
-                observed_token=int(unrelated_tokens[-1]),  # Ensure token is numerical ID
+                observed_token=int(unrelated_tokens[-1]),
                 vocab_size=vocab_size,
                 k=k,
                 b=b,
@@ -141,6 +237,9 @@ def run_experiment():
                 threshold=0.5
             )
             unrelated_costs.append(unrelated_min_cost)
+
+            # Plot token probabilities for unrelated text
+            plot_token_probabilities(unrelated_tokens, model, tokenizer, "Unrelated")
 
             # Print and write the generated texts
             output = (
@@ -173,17 +272,26 @@ def run_experiment():
         output_file.write(f"Paraphrased Text: {avg_paraphrased:.4f}\n")
         output_file.write(f"Unrelated Text: {avg_unrelated:.4f}\n\n")
 
+    # Plot xi distributions
+    plot_xi_distributions(watermarked_xis, paraphrased_xis, unrelated_xis)
+
+    analyze_substitution_effect(torch.tensor(watermarked_tokens, dtype=torch.long), paraphrased_tokens, model, tokenizer)
+
     # Plot bar chart of average min_costs
     plt.figure(figsize=(10, 6))
     categories = ["Watermarked Text", "Paraphrased Text", "Unrelated Text"]
     averages = [avg_watermarked, avg_paraphrased, avg_unrelated]
-    
+
     plt.bar(categories, averages, color=["blue", "green", "red"])
     plt.xlabel("Text Type")
-    plt.ylabel("Average Min Cost")
+    plt.ylabel("Average cost")
     plt.title("Average Min Cost for Different Text Types")
+
+    plt.savefig("Image_outputs/Average Min Cost for Different Text Types.png")
+
     plt.grid(axis="y")
     plt.show()
 
 if __name__ == "__main__":
     run_experiment()
+

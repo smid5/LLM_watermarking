@@ -170,8 +170,11 @@ def analyze_null_distribution(null_results, observed_result):
     plt.title("Null Distribution vs Observed Result")
     plt.xlabel("Test Statistic")
     plt.ylabel("Frequency (Normalized)")
+
+    plt.savefig("Image_outputs/Null Distribution vs Observed Result.png")
     plt.legend()
     plt.show()
+
     
     # Compute and print metrics
     mean_null = torch.mean(null_results).item()
@@ -192,6 +195,8 @@ def overlay_xi_null(null_results, xi_values):
     plt.title("Comparison of Null Distribution and Observed xi")
     plt.xlabel("Values")
     plt.ylabel("Frequency (Normalized)")
+
+    plt.savefig("Image_outputs/Comparison of Null Distribution and Observed xi.png")
     plt.legend()
     plt.show()
 
@@ -206,6 +211,9 @@ def simulate_known_watermark(null_results, simulated_observed):
     plt.title("Null Distribution vs Simulated Watermark")
     plt.xlabel("Test Statistic")
     plt.ylabel("Frequency (Normalized)")
+
+    plt.savefig("Image_outputs/Null Distribution vs Simulated Watermark.png")
+
     plt.legend()
     plt.show()
     
