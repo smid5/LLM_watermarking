@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from generate_simhash import generate_with_simhash
-from detection_simhash import simhash_detect_with_permutation
+from detection_simhash import simhash_detect_with_permutation  # Adjusted to the correct import
 
 # Main example: Text generation with watermarking and detection
 def example_with_detection():
@@ -25,10 +25,8 @@ def example_with_detection():
     prompts = tokenizer("", return_tensors="pt").input_ids  # Empty context to start generation
 
     # Ranges for k and b
-    k_values = [100, 150, 180, 200]  # Number of hash functions
-    b_values = [20, 30, 40, 50]             # Bits per hash
-    # k_values = [150]
-    # b_values = [30]
+    k_values = [10, 20, 30, 50, 80, 100, 150, 180, 200]  # Number of hash functions
+    b_values = [10, 16, 20, 30, 40, 50]      # Bits per hash
 
     results = []
 
@@ -51,14 +49,12 @@ def example_with_detection():
             generated_text = tokenizer.decode(generated_tokens, skip_special_tokens=True)
             print("Generated Tokens:", generated_text)
 
-            # Step 2: Detection on the last generated token
-            observed_token = generated_tokens[-1]  # Last generated token
-
-            # Perform detection and compute p-value
+            # Step 2: Detection on the generated sequence
+            # Perform detection and compute p-value for the whole sequence
             torch.manual_seed(seed)  # Ensure reproducibility
-            p_value, result, _ = simhash_detect_with_permutation(
-                context=tokenizer.decode(generated_tokens[:-1], skip_special_tokens=True),  # Use all tokens except the last one as context
-                observed_token=observed_token,
+            p_value, result, observed_cost = simhash_detect_with_permutation(
+                context=generated_text,  # Use the whole generated text as context
+                observed_sequence=generated_tokens,  # Use the whole sequence of tokens
                 vocab_size=vocab_size,
                 k=k,
                 b=b,
@@ -71,8 +67,7 @@ def example_with_detection():
             results.append((k, b, p_value))
 
             # Output results
-            print(f"P-value: {p_value:.4f}")
-            print(result)
+            print(f"P-value: {p_value:.4f}, Result: {result}, Observed Cost: {observed_cost}")
 
     # Prepare data for heatmap
     k_indices = {k: i for i, k in enumerate(k_values)}
@@ -91,6 +86,7 @@ def example_with_detection():
     plt.xlabel("b (Bits per Hash)")
     plt.ylabel("k (Number of Hash Functions)")
     plt.title("Heatmap of P-values for Different k and b Values")
+    plt.savefig("Image_outputs/Heatmap of P-values for Different k and b Values.png")
     plt.show()
 
 if __name__ == "__main__":

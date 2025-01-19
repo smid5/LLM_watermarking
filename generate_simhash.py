@@ -43,6 +43,7 @@ class SimHashWatermark:
         Step 6: Use text_seed to sample xi ~ Unif[(0, 1)]^vocab_size.
         - Deterministically generate xi using hash value as the seed.
         """
+
         hash_value = self.hash_function(vector, ell)  # Compute hash value
         generator = torch.Generator()
         generator.manual_seed(hash_value)  # Set random seed based on hash value
