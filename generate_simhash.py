@@ -13,7 +13,7 @@ def simple_encoder(text, model, tokenizer):
 
 # SimHashWatermark class for watermarking logic
 class SimHashWatermark:
-    def __init__(self, d, vocab_size, k, b, seed):
+    def __init__(self, d, vocab_size, k, b, seed=None):
         """
         Initialization: Precompute Gaussian vectors.
         Step 3: Use (seed, ell) to sample b Gaussian vectors r_1, ..., r_b in R^d.
@@ -24,7 +24,9 @@ class SimHashWatermark:
         self.b = b  # Number of bits per hash
         self.seed = seed  # Seed for reproducibility
 
-        torch.manual_seed(seed)  # Set random seed for reproducibility
+        # torch.manual_seed(seed)  # Set random seed for reproducibility
+        if seed is not None:
+            torch.manual_seed(seed)  # Set random seed for reproducibility if seed is given
         self.gaussian_vectors = [torch.randn(d) for _ in range(k * b)]  # Pre-generate Gaussian vectors
 
     def hash_function(self, vector, ell):
@@ -49,7 +51,7 @@ class SimHashWatermark:
         generator.manual_seed(hash_value)  # Set random seed based on hash value
         return torch.rand(self.vocab_size, generator=generator)  # Generate uniform random vector xi
 
-def generate_with_simhash(model, tokenizer, prompts, vocab_size, n, m, seeds, k, b, random_offset=True):
+def generate_with_simhash(model, tokenizer, prompts, vocab_size, n, m, k, b, seeds=None, random_offset=True):
     """
     Enhanced Generation Algorithm with SimHash and Exponential Minimum Sampling.
     """
@@ -59,7 +61,7 @@ def generate_with_simhash(model, tokenizer, prompts, vocab_size, n, m, seeds, k,
 
     # Dynamically determine embedding dimensionality d
     d = embedded_context.size(-1)
-    watermark = SimHashWatermark(d, vocab_size, k, b, seeds[0])  # Initialize SimHashWatermark
+    watermark = SimHashWatermark(d, vocab_size, k, b, seeds)  # Initialize SimHashWatermark
 
     # Random offset for unpredictability
     offset = torch.randint(n, size=(1,)) if random_offset else torch.zeros(1, dtype=torch.int64)

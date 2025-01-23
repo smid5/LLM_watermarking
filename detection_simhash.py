@@ -12,7 +12,7 @@ def simple_encoder(text, model, tokenizer):
         embeddings = outputs.hidden_states[-1].mean(dim=1).squeeze()  # Mean pooling
     return embeddings
 
-def simhash_detect_with_permutation(context, observed_sequence, vocab_size, k, b, seed, model, tokenizer, n_runs=100, max_seed=100000, threshold=0.1):
+def simhash_detect_with_permutation(context, observed_sequence, vocab_size, k, b, model, tokenizer, seed=None, n_runs=100, max_seed=100000, threshold=0.1):
     """
     SimHash Detection Logic with Permutation Test for p-value computation.
     Determines whether a watermark exists in the observed sequence of tokens.
@@ -36,11 +36,17 @@ def simhash_detect_with_permutation(context, observed_sequence, vocab_size, k, b
         return min_cost
 
     # Compute observed test statistics for the sequence
-    observed_results = [compute_test_stat(token) for token in observed_sequence]
-    observed_average_cost = sum(observed_results) / len(observed_results)
+    # observed_results = [compute_test_stat(token) for token in observed_sequence]
+    observed_results = [(token, compute_test_stat(token)) for token in observed_sequence]
+    # observed_average_cost = sum(observed_results) / len(observed_results)
+    observed_average_cost = sum(cost for _, cost in observed_results) / len(observed_results)
+    # individual_token_costs = {token: costs for token, (_, costs) in zip(observed_sequence, observed_results)}
 
     # Generate null distribution via permutations
-    generator = torch.Generator().manual_seed(seed)
+    if seed is not None:
+        generator = torch.Generator().manual_seed(seed)
+    else:
+        generator = torch.Generator()
     null_results = []
 
     for _ in range(n_runs):
@@ -58,4 +64,4 @@ def simhash_detect_with_permutation(context, observed_sequence, vocab_size, k, b
     # Analyze detection based on threshold
     result = "Watermark detected" if p_value < threshold else "No watermark detected"
 
-    return p_value, result, observed_average_cost
+    return p_value, result, observed_average_cost, observed_results
