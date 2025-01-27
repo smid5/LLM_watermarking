@@ -173,7 +173,7 @@ def run_experiment():
     # base_seed = 42  # Base seed for reproducibility
     vocab_size = tokenizer.vocab_size
     n = 256   # Sampling parameter (unused here)
-    m = 50    # Number of tokens to generate
+    m = 300    # Number of tokens to generate
     num_samples = 10  # Increase number of samples for better analysis
 
     # Generate initial tokens (starting from an empty prompt)
