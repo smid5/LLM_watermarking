@@ -31,9 +31,19 @@ def simhash_detect_with_permutation(context, observed_sequence, vocab_size, k, b
         for ell in range(k):
             xi = watermark.sample_text_seed(embedded_context, ell)
             xi_i = xi[token % xi.size(0)]
-            cost = -torch.log(xi_i + 1e-9)
+            cost = -torch.log(xi_i)
             min_cost = min(min_cost, cost.item())
         return min_cost
+
+    # def compute_test_stat(token, null=False):
+    #     total_cost = 0
+    #     for ell in range(k):
+    #         xi = watermark.sample_text_seed(embedded_context, ell)
+    #         xi_i = xi[token % xi.size(0)]
+    #         cost = -torch.log(xi_i + 1e-9)  # Adding a small constant to avoid log(0)
+    #         total_cost += cost.item()
+    #     average_cost = total_cost / k  # Calculate the average cost over all hash functions
+    #     return average_cost
 
     # Compute observed test statistics for the sequence
     # observed_results = [compute_test_stat(token) for token in observed_sequence]

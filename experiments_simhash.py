@@ -92,7 +92,7 @@ def plot_xi_distributions(watermarked_xis, paraphrased_xis, unrelated_xis):
     plt.ylabel("Frequency")
 
     plt.savefig("Image_outputs/Distribution of xi Values.png")
-    plt.show()
+    # plt.show()
 
 # Function to analyze substitution attack's effect on token probabilities
 def analyze_substitution_effect(original_tokens, paraphrased_tokens, model, tokenizer):
@@ -113,7 +113,7 @@ def analyze_substitution_effect(original_tokens, paraphrased_tokens, model, toke
     plt.title("Effect of Substitution on Token Probabilities")
 
     plt.savefig("Image_outputs/Effect of Substitution on Token Probabilities")
-    plt.show()
+    # plt.show()
 
 # Function to analyze and plot token probability distributions
 def plot_token_probabilities(tokens, model, tokenizer, label):
@@ -144,7 +144,7 @@ def plot_token_probabilities(tokens, model, tokenizer, label):
 
     plt.savefig("Image_outputs/"+ str(title) + ".png")
 
-    plt.show()
+    # plt.show()
 
 def plot_detailed_results(detailed_results, tokenizer, title="Token Cost Distribution"):
     tokens, costs = zip(*detailed_results)  # Unpack the list of tuples into two separate tuples
@@ -158,7 +158,7 @@ def plot_detailed_results(detailed_results, tokenizer, title="Token Cost Distrib
     plt.xticks(rotation=90)  # Rotate labels to fit longer words
     plt.tight_layout()  # Adjust layout to make room for x-axis labels
     plt.savefig("Image_outputs/" + str(title))
-    plt.show()
+    # plt.show()
 
 # Updated main experiment function
 def run_experiment():
@@ -173,7 +173,7 @@ def run_experiment():
     # base_seed = 42  # Base seed for reproducibility
     vocab_size = tokenizer.vocab_size
     n = 256   # Sampling parameter (unused here)
-    m = 300    # Number of tokens to generate
+    m = 100    # Number of tokens to generate
     num_samples = 10  # Increase number of samples for better analysis
 
     # Generate initial tokens (starting from an empty prompt)
@@ -327,7 +327,7 @@ def run_experiment():
     plt.savefig("Image_outputs/Average Min Cost for Different Text Types.png")
 
     plt.grid(axis="y")
-    plt.show()
+    # plt.show()
 
 if __name__ == "__main__":
     run_experiment()

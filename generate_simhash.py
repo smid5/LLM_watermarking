@@ -3,7 +3,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 def simple_encoder(text, model, tokenizer):
     """
-    Encoder function: Converts input text into embeddings using the model's last hidden state.
+    Step 1: Embed context into vector v in R^d.
+    Converts input text into embeddings using the model's last hidden state.
     """
     inputs = tokenizer(text, return_tensors="pt").to(model.device)
     with torch.no_grad():
@@ -24,7 +25,6 @@ class SimHashWatermark:
         self.b = b  # Number of bits per hash
         self.seed = seed  # Seed for reproducibility
 
-        # torch.manual_seed(seed)  # Set random seed for reproducibility
         if seed is not None:
             torch.manual_seed(seed)  # Set random seed for reproducibility if seed is given
         self.gaussian_vectors = [torch.randn(d) for _ in range(k * b)]  # Pre-generate Gaussian vectors
@@ -45,92 +45,68 @@ class SimHashWatermark:
         Step 6: Use text_seed to sample xi ~ Unif[(0, 1)]^vocab_size.
         - Deterministically generate xi using hash value as the seed.
         """
-
         hash_value = self.hash_function(vector, ell)  # Compute hash value
         generator = torch.Generator()
         generator.manual_seed(hash_value)  # Set random seed based on hash value
         return torch.rand(self.vocab_size, generator=generator)  # Generate uniform random vector xi
 
+def sample_and_scale_probs(embedded_context, probs, watermark, k):
+    """
+    Sample xi using SimHash and modify the token probabilities.
+    """
+    # Step 2: Sample ell uniformly from {1, ..., k}
+    ell = torch.randint(0, k, (1,)).item()
+
+    # Step 6: Use text_seed to sample xi ~ Unif[(0,1)]^vocab size
+    xi = watermark.sample_text_seed(embedded_context, ell)
+    
+    # Ensure xi is properly aligned with the size of probs
+    if xi.size(0) != probs.size(-1):
+        if xi.size(0) > probs.size(-1):
+            xi = xi[:probs.size(-1)]  # Trim xi if larger
+        else:
+            xi = torch.nn.functional.pad(xi, (0, probs.size(-1) - xi.size(0)))  # Pad xi if smaller
+    
+    # Normalize xi to use as probability adjustments
+    xi_probs = xi / xi.sum()
+
+    # Step 8: Apply exponential minimum sampling to get i* = max_j log(xi_j) / p_j
+    scaled_probs = torch.pow(probs, 1.2) * xi_probs  # Apply the watermark with stronger influence
+    return scaled_probs
+
 def generate_with_simhash(model, tokenizer, prompts, vocab_size, n, m, k, b, seeds=None, random_offset=True):
     """
-    Enhanced Generation Algorithm with SimHash and Exponential Minimum Sampling.
+    Enhanced Generation Algorithm with SimHash and stronger watermarking influence.
     """
-    # Step 1: Embed context into vector v in R^d
+    # Step 1: Embed context using encoder into vector v in R^d
     context = tokenizer.decode(prompts[0], skip_special_tokens=True)
     embedded_context = simple_encoder(context, model, tokenizer)
 
-    # Dynamically determine embedding dimensionality d
-    d = embedded_context.size(-1)
-    watermark = SimHashWatermark(d, vocab_size, k, b, seeds)  # Initialize SimHashWatermark
+    # Instantiate SimHashWatermark with the parameters including seeds
+    watermark = SimHashWatermark(embedded_context.size(-1), vocab_size, k, b, seeds)
 
-    # Random offset for unpredictability
-    offset = torch.randint(n, size=(1,)) if random_offset else torch.zeros(1, dtype=torch.int64)
-
-    # Initialize inputs and attention mask
     inputs = prompts.to(model.device)
-    attn = torch.ones_like(inputs)  # Attention mask
-    past = None  # For caching model's past key values
-    initial_temperature = 1.0  # Start with higher temperature
-    temperature_decay = 0.95  # Gradually reduce temperature
+    attn = torch.ones_like(inputs)
+    past = None
+    temperature = 1.0
 
-    diversity_penalty = torch.ones(vocab_size, device=model.device)  # Initialize diversity penalty
-    token_history = torch.zeros(vocab_size, device=model.device)  # Track token frequencies
-
-    for i in range(m):  # Generate m tokens
+    for i in range(m):
         with torch.no_grad():
             if past:
                 output = model(inputs[:, -1:], past_key_values=past, attention_mask=attn)
             else:
                 output = model(inputs)
 
-        logits = output.logits[:, -1]
+        # Step 7: Evaluate probability distribution p = LLM(context)
+        probs = torch.nn.functional.softmax(output.logits[:, -1] / temperature, dim=-1)
+        scaled_probs = sample_and_scale_probs(embedded_context, probs, watermark, k)
 
-        # Dynamically adjust temperature
-        temperature = max(0.7, initial_temperature * (temperature_decay ** i))
-        probs = torch.nn.functional.softmax(logits / temperature, dim=-1)
-
-        # Calculate entropy to adjust diversity penalty scaling
-        entropy = -torch.sum(probs * torch.log(probs + 1e-9)).item()
-        entropy_factor = max(0.5, 1 - entropy / torch.log(torch.tensor(probs.size(-1), device=model.device)))
-
-        # Adjust diversity_penalty to match probs size
-        if diversity_penalty.size(0) != probs.size(-1):
-            diversity_penalty = torch.ones(probs.size(-1), device=model.device)  # Reinitialize
-            token_history = torch.zeros(probs.size(-1), device=model.device)  # Reinitialize token history
-
-        # Apply history-aware penalty to diversify tokens
-        history_penalty = torch.exp(-token_history / (i + 1))  # Decay based on token reuse
-        penalized_probs = (probs / diversity_penalty) * history_penalty
-        penalized_probs = penalized_probs / penalized_probs.sum()  # Renormalize
-
-        # Blend penalized and original probabilities
-        blended_probs = 0.7 * penalized_probs + 0.3 * probs
-
-        # Step 2: Sample ell uniformly from {1, ..., k}
-        ell = torch.randint(0, k, (1,)).item()
-
-        # Step 6: Use text_seed to sample xi
-        xi = watermark.sample_text_seed(embedded_context, ell)
-
-        # Ensure xi matches the size of probs
-        if xi.size(0) != blended_probs.size(-1):
-            xi = xi[:blended_probs.size(-1)]  # Trim xi if larger
-            xi = torch.nn.functional.pad(xi, (0, blended_probs.size(-1) - xi.size(0)))  # Pad xi if smaller
-
-        # Step 8: Exponential minimum sampling
-        alpha = 1.2  # Lower alpha for balanced watermark influence
-        scaled_probs = torch.log(xi + 1e-9) / (blended_probs ** alpha)
-
-        # Select the next token
+        # Select the next token based on the scaled probabilities
         next_token_id = torch.argmax(scaled_probs, dim=-1, keepdim=True)
 
-        # Update diversity penalty and token history
-        diversity_penalty[next_token_id] += 1  # Penalize selected token
-        token_history[next_token_id] += 1  # Track token usage
-
-        # Append the next token to the input sequence
+        # Append the next token to the input sequence for the next iteration
         inputs = torch.cat([inputs, next_token_id], dim=1)
-        attn = torch.cat([attn, attn.new_ones((attn.shape[0], 1))], dim=-1)  # Update attention mask
-        past = output.past_key_values  # Update cached key values
+        attn = torch.cat([attn, attn.new_ones((attn.shape[0], 1))], dim=-1)
+        past = output.past_key_values
 
-    return inputs[0].cpu().numpy().tolist()  # Convert generated tokens to a list for decoding
+    return inputs[0].cpu().numpy().tolist()
