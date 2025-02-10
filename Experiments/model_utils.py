@@ -1,56 +1,68 @@
-import os
-import methods.method1 as method1
-import methods.method2 as method2
-import methods.method3 as method3
+import sys
 
-def load_text_data(file_path):
-    """Loads text data from a file."""
-    with open(file_path, "r", encoding="utf-8") as f:
-        return f.read().splitlines()
+sys.path.insert(0, '/Users/hayadiwan/Desktop/Tiny Projects/watermark-main/LLM_watermarking')
 
-def apply_watermarking(text, method="method1"):
+# from Unrelated.generate_unrelated import generate
+
+# from Exp.generate_exp import exp_generate
+# from Exp.detect_exp import exp_detect
+
+# from Red_green.generate_red_green import red_green_generate
+# from Red_green.detect_red_green import red_green_detect
+
+# from Simhash.generate_simhash import simhash_generate
+# from Simhash.detect_simhash import simhash_detect
+
+
+from Methods.Unrelated.generate_unrelated import generate
+
+# from Methods.Exp.generate_exp import exp_generate
+# from Methods.Exp.detect_exp import exp_detect
+
+# from Methods.Red_green.generate_red_green import red_green_generate
+# from Methods.Red_green.detect_red_green import red_green_detect
+
+from Methods.Simhash.generate_simhash import simhash_generate
+from Methods.Simhash.detect_simhash import simhash_detect
+
+vocab_size = 50272
+
+# ============================================================
+# Watermarking Utility Functions
+# ============================================================
+
+def apply_watermarking(k, b, tokenizer, model, text, num_tokens, method="exp"):
+    detected_result = "" # REMOVE LATER
+
     """Applies a selected watermarking method to the given text."""
-    if method == "method1":
-        return method1.watermark(text)
-    elif method == "method2":
-        return method2.watermark(text)
-    elif method == "method3":
-        return method3.watermark(text)
+    if method == "exp": # TO DO
+        # generated_text = method1.generate(text)
+        # detected_result = method1.detect(generated_text)
+        print("TO DO exp")
+
+        return detected_result
+    elif method == "simhash": # DONE
+        output_simhash = simhash_generate(tokenizer, model, vocab_size, num_tokens, text, k, b)
+        detect_simhash = simhash_detect(tokenizer, model, vocab_size, output_simhash, k, b)
+        return output_simhash, detect_simhash
+    elif method == "red_green": # TO DO
+        print("TO DO red_green")
+        # generated_text = method3.generate(text)
+        # detected_result = method3.detect(generated_text)
+        return detected_result
+    elif method == "unrelated": # DONE
+        output_normal = generate(tokenizer, model, vocab_size, num_tokens, text)
+        detect_normal = simhash_detect(tokenizer, model, vocab_size, output_normal, k, b)
+        return output_normal, detect_normal
+    elif method == "attack_watermark":
+        detect_modified = simhash_detect(tokenizer, model, vocab_size, text, k, b)
+        return detect_modified
     else:
-        raise ValueError("Unknown method selected.")
+        raise ValueError(f"Unknown method selected: {method}")
 
-def evaluate_results(original_text, watermarked_text):
-    """Compares original vs. watermarked text using some metric."""
-    # Example: Check similarity
-    return sum(1 for a, b in zip(original_text, watermarked_text) if a == b) / len(original_text)
 
-def save_results(results, filename="experiment_results.txt"):
-    """Saves experiment results to a file."""
-    with open(filename, "w") as f:
-        f.write("\n".join(results))
 
----
 
-# stores sentence_starters.txt as variable
-file_id = "1Bl1v09BK1TLX0RhE8YkFUGfmKD-7KUyN"
-file_name = "sentence_starters.txt"
-!wget -O {file_name} "https://drive.google.com/uc?id={file_id}"
 
-# takes a file with sentence-starting phrases and generates text with them
-# compares the detection cost using simhash of text generated
-# without watermarking, with simhash, and with one word changed after simhash
-with open(file_name, 'r') as f: # text file generated using Chat-GPT
-    cost_normal = []
-    cost_simhash = []
-    cost_modified_simhash = []
 
-    # Iterate over each line in the file (one line at a time)
-    for line in f:
-        if line:
-            line = line.strip()
-            print(line)
-            output_normal = generate(vocab_size, 60, line)
-            cost_normal.append(simhash_detect(vocab_size, output_normal))
-            output_simhash = simhash_generate(vocab_size, 60, line)
-            cost_simhash.append(simhash_detect(vocab_size, output_simhash))
-            cost_modified_simhash.append(simhash_detect(vocab_size, modify_text(vocab_size, output_simhash, 1)))
+

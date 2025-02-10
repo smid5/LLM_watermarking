@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # function that randomly replaces "num_modify" tokens in the input text
-def modify_text(vocab_size, text, num_modify):
+def modify_text(tokenizer, vocab_size, text, num_modify):
     ids = tokenizer.encode(text, return_tensors="pt").squeeze()
     modified_ids = []
 
@@ -17,4 +17,5 @@ def modify_text(vocab_size, text, num_modify):
         modified_ids.append(idx[0])
 
     text = tokenizer.decode(ids, skip_special_tokens=True)
+    
     return text
