@@ -3,15 +3,13 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessorLis
 import numpy as np
 import matplotlib.pyplot as plt
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-model_name = "facebook/opt-1.3b"
-vocab_size = 50272
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
+# model_name = "facebook/opt-1.3b"
+# tokenizer = AutoTokenizer.from_pretrained(model_name)
+# model = AutoModelForCausalLM.from_pretrained(model_name)
 
 # Generates text using the pretrained model without any watermarking techniques
-def generate(vocab_size, num_tokens, text):
-    input_ids=tokenizer.encode(text, return_tensors="pt").to(device)
+def generate(tokenizer, model, vocab_size, num_tokens, text):
+    input_ids=tokenizer.encode(text, return_tensors="pt")
 
     outputs = model.generate(
         input_ids,

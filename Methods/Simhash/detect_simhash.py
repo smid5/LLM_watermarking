@@ -3,17 +3,9 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessorLis
 import numpy as np
 import matplotlib.pyplot as plt
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-model_name = "facebook/opt-1.3b"
-vocab_size = 50272
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
+def simhash_detect(tokenizer, model, vocab_size, text, hash_len=10, k=10, b=32): # MISSING VECTORS AS A PARAM
+    embedding_dimension = model.config.hidden_size
 
-# GENERALIZATION (detection)
-
-import torch
-
-def simhash_detect(vocab_size, text, hash_len=10, k=10, b=32): # MISSING VECTORS AS A PARAM
     ids = tokenizer.encode(text, return_tensors="pt").squeeze() # ok
     with torch.no_grad(): # ok
         embeddings = model.model.decoder.embed_tokens(ids) # ok
@@ -30,17 +22,20 @@ def simhash_detect(vocab_size, text, hash_len=10, k=10, b=32): # MISSING VECTORS
 
         for ell in range(k): # different 
            
-            r_vectors = torch.randn((b, embedding_dimension), device=ids.device) # different (takes vectors as input)
+            # NOT REALLY SAMPLING FROM SEED AND ELL ???
+            r_vectors = torch.randn((b, embedding_dimension)) # different (takes vectors as input) (is this ok??)
+            # r_vectors = torch.randn((b, embedding_dimension)) * (ell + 1) # IS THIS A BETTER OPTION?
 
             projections = torch.matmul(r_vectors, input_vector) # ok
             simhash_binary = (projections > 0).int() # ok
             simhash_seed = int("".join(map(str, simhash_binary.tolist())), 2) # ok
             
             torch.manual_seed(simhash_seed) # ok
-            xi = torch.rand(vocab_size, device=ids.device) 
+            xi = torch.rand(vocab_size) 
 
             # current_cost = torch.log(1 - xi[ids[i]]).item() # added
-            current_cost = -torch.log(xi[ids[i]]).item() if xi[ids[i]] < 1 else 0  # different
+            # current_cost = -torch.log(xi[ids[i]]).item() if xi[ids[i]] < 1 else 0  # different
+            current_cost = torch.log(1 - xi[ids[i]]).item() if xi[ids[i]] < 1 else 0 # best ?
             min_cost = min(min_cost, current_cost) # different
 
         cost += min_cost / denominator # adds the negative but since we do 1-xi i think ok just check they are equal
