@@ -1,0 +1,14 @@
+ITERATION 1
+Watermarked text: Once upon a time, in a faraway land, a boy's heart's aching. And his power isn't flexible.  *Braveheart reference*
+My favorite, is also King Lear, when you ask where someone lives, and they say 'not in the castle'.If you're using WMR, you should get a
+Paraphrased text: Once upon e time, in e ferewey lend, e boy's heert's eching. And his power isn't flexible.  *Breveheert reference*
+My fevorite, is elso King Leer, when you esk where someone lives, end they sey 'not in the cestle'.If you're using WMR, you should get e
+Unrelated text: In a galaxy far away, a new adventure begins. The battle begins!
+Nooo. Too late
+It is never too late, I don't see how it's relevant to this post
+
+Average Min Cost Values:
+Watermarked Text: 22.8198
+Paraphrased Text: 27.0610
+Unrelated Text: 23.4711
+
