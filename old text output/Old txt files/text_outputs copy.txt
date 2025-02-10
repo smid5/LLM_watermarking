@@ -1,5 +1,0 @@
-Average Min Cost Values:
-Watermarked Text: 0.0006
-Paraphrased Text: 0.0147
-Unrelated Text: 0.0057
-
