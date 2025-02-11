@@ -61,10 +61,12 @@ def main():
     plt.legend()
     plt.grid()
 
-    plt.savefig("Distribution of SimHash cost.png")
+    plt.savefig("../Figures/Distribution of SimHash cost.png")
 
     # Show the plot
     plt.show()
 
 if __name__ == '__main__':
     main()
+
+    
