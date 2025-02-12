@@ -43,7 +43,7 @@ def apply_watermarking(k, b, tokenizer, model, text, num_tokens, method="exp"):
         return detected_result
     elif method == "simhash": # DONE
         output_simhash = simhash_generate(tokenizer, model, vocab_size, num_tokens, text, k, b)
-        detect_simhash = simhash_detect(tokenizer, model, vocab_size, output_simhash, k, b)
+        _, detect_simhash = simhash_detect(tokenizer, model, vocab_size, output_simhash, k, b)
         return output_simhash, detect_simhash
     elif method == "red_green": # TO DO
         print("TO DO red_green")
@@ -52,10 +52,10 @@ def apply_watermarking(k, b, tokenizer, model, text, num_tokens, method="exp"):
         return detected_result
     elif method == "unrelated": # DONE
         output_normal = generate(tokenizer, model, vocab_size, num_tokens, text)
-        detect_normal = simhash_detect(tokenizer, model, vocab_size, output_normal, k, b)
+        _, detect_normal = simhash_detect(tokenizer, model, vocab_size, output_normal, k, b)
         return output_normal, detect_normal
     elif method == "attack_watermark":
-        detect_modified = simhash_detect(tokenizer, model, vocab_size, text, k, b)
+        _, detect_modified = simhash_detect(tokenizer, model, vocab_size, text, k, b)
         return detect_modified
     else:
         raise ValueError(f"Unknown method selected: {method}")

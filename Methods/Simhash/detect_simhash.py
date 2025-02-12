@@ -2,6 +2,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessorList
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.stats import gamma
 
 # ------------------------------
 # Things removed/changed from previous code: hash_len removed, introducted r_vectors and ell, adjusted input vectors
@@ -60,9 +61,12 @@ def simhash_detect(tokenizer, model, vocab_size, text, k=10, b=32): # MISSING VE
 
     avg_cost = cost  # Final avg-cost
 
+    n = len(ids)
     # Compute p-value using Gamma(n, nk)
     shape = n  # Shape parameter
     scale = 1 / (n * k)  # Scale parameter (1 / rate)
     p_value = 1 - gamma.cdf(avg_cost, shape, scale=scale)
 
-    return cost 
+    print(p_value)
+
+    return p_value, cost 
