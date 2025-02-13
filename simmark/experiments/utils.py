@@ -1,10 +1,12 @@
 
 from ..methods import logit_processors, detection_methods
+from .attacks import modify_text
 from transformers import LogitsProcessorList
 import torch
+import numpy as np
 
 def load_llm_config(model_name):
-    if model_name == "facebook/opt-1.3b":
+    if model_name == "facebook/opt-125m":
         from transformers import AutoModelForCausalLM, AutoTokenizer
         model = AutoModelForCausalLM.from_pretrained(model_name)
         tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -87,38 +89,52 @@ def read_data(filename):
     except FileNotFoundError:
         with open(filename, 'w') as f:
             pass
-
-    prompts, generated_texts, p_values, seeds = [], [], [], []
+    outputs = {}
     with open(filename, 'r') as f:
         for line in f:
             line = eval(line)
-            prompts.append(line['prompt'])
-            generated_texts.append(line['generated_text'])
-            p_values.append(line['p_value'])
-            seeds.append(line['seed'])
-    return {
-        'prompts': prompts,
-        'generated_texts': generated_texts,
-        'p_values': p_values,
-        'seeds': seeds
-    }
+            for key in line:
+                if key not in outputs:
+                    outputs[key] = []
+                outputs[key].append(line[key])
+    return outputs
 
-def test_watermark(prompts, num_tokens, llm_config, generation_name, detection_name, attack_method=None, seed=42, folder='data/'):
+def extract_attack(llm_config, attack_name):
+    if 'modify' in attack_name:
+        num_modify = int(attack_name.split('_')[1])
+        return lambda text : modify_text(
+            llm_config['tokenizer'],
+            llm_config['vocab_size'],
+            text,
+            num_modify=num_modify
+        )
+    else:
+        raise ValueError(f"Unknown attack method: {attack_name}")
+
+def test_watermark(prompts, num_tokens, llm_config, generation_name, detection_name, attack_name="", seed=42, folder='data/'):
     p_values = []
-    filename = folder + f'{generation_name}_{detection_name}.txt'
+    filename = folder + f'{generation_name}_{detection_name}_{attack_name}.txt'
     cached_data = read_data(filename)
+    matches = ['prompt', 'seed', 'num_tokens']
     for prompt in prompts:
         # Check if prompt and seed is already in cached data
-        if prompt in cached_data['prompts']:
-            idx = cached_data['prompts'].index(prompt)
-            if seed == cached_data['seeds'][idx]:
-                p_values.append(cached_data['p_values'][idx])
+        try:
+            idx = cached_data['prompt'].index(prompt)
+            is_match = True
+            for match in matches:
+                if cached_data[match][idx] != locals()[match]:
+                    is_match = False
+            if is_match:
+                p_values.append(cached_data['p_value'][idx])
                 continue
+        except KeyError:
+            pass
 
         generated_text = generate(prompt, num_tokens, llm_config, generation_name, seed=seed)
         # Remove prompt from generated text
         generated_text = generated_text[len(prompt):]
-        if attack_method is not None:
+        if attack_name != "":
+            attack_method = extract_attack(llm_config, attack_name)
             generated_text = attack_method(generated_text)
         p_value = detect(generated_text, llm_config, detection_name, seed=seed)
         p_values.append(p_value)
@@ -128,7 +144,8 @@ def test_watermark(prompts, num_tokens, llm_config, generation_name, detection_n
             'prompt': prompt,
             'generated_text': generated_text,
             'p_value': p_value,
-            'seed' : seed
+            'seed' : seed,
+            'num_tokens' : num_tokens,
         }
         with open(filename, 'a') as f:
             f.write(str(output) + '\n')

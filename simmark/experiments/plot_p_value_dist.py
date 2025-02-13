@@ -3,14 +3,13 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 from .utils import load_llm_config, test_watermark
-from .attacks import modify_text
 
 num_tokens = 10
-k = 10
-b = 3
+k = 2
+b = 64
 
 def plot_p_value_dist(filename):
-    llm_config = load_llm_config('facebook/opt-1.3b')
+    llm_config = load_llm_config('facebook/opt-125m')
     # takes a file with sentence-starting phrases and generates text with them
     # compares the detection cost using simhash of text generated
     # without watermarking, with simhash, and with one word changed after simhash
@@ -29,19 +28,14 @@ def plot_p_value_dist(filename):
 
     # Generate with simhash watermark, no attack, and detection
     p_values_simmark = test_watermark(
-        prompts, num_tokens, llm_config, f"simhash_{k}_{b}", detection_name
+        prompts, num_tokens, llm_config, f"simmark_{k}_{b}", detection_name
     )
 
-    attack_text = lambda text : modify_text(
-        llm_config['tokenizer'],
-        llm_config['vocab_size'],
-        text,
-        num_modify=1
-    )
+    attack_name = "modify_1"
 
     # Generate with simhash watermark, with attack, and detection
     p_values_modified_simmark = test_watermark(
-        prompts, num_tokens, llm_config, f"simhash_{k}_{b}", detection_name, attack_text
+        prompts, num_tokens, llm_config, f"simmark_{k}_{b}", detection_name, attack_name
     )
 
         

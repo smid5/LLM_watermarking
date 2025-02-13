@@ -18,7 +18,7 @@ def simhash(input_vector, hash_idx, vocab_size, seed, k, b):
     16)
 
     # Use simhash_seed to sample xi ~ Unif[(0,1)^vocab size]
-    np.random.seed(simhash_seed)
+    np.random.seed(simhash_seed % 2**32)
     xi = np.random.rand(vocab_size)
 
     return xi
@@ -77,7 +77,9 @@ def simmark_detect(text, config):
         avg_cost += min_cost / len(ids)
 
     shape = len(ids) 
-    scale = len(ids) * config['k']
-    p_value = gamma.cdf(avg_cost, shape, scale=scale)
+    rate = len(ids) * config['k']
+    p_value = gamma.cdf(avg_cost, shape, scale=1/rate)
+
+    print(f"Detection cost: {avg_cost}, p-value: {p_value}")
 
     return p_value
