@@ -4,7 +4,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessorLis
 import numpy as np
 import matplotlib.pyplot as plt
 
-import model_utils as utils
+import simmark.experiments.utils as utils
 import attacks 
 
 # stores sentence_starters.txt as variable
