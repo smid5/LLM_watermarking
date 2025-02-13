@@ -5,6 +5,29 @@ from transformers import LogitsProcessorList
 import torch
 import numpy as np
 
+linestyles = ['dotted', 'solid', 'dashed', 'dashdot', (5,(10,3)), (0,(1,1)), (0,(5,10)),(0,(5,1)), (0,(3,10,1,10)), (0,(3,5,1,5)), (0,(3,1,1,1)), (0,(3,5,1,5,1,5)), (0,(3,10,1,10,1,10)), (0,(3,1,1,1,1,1))]
+
+cbcolors = [
+    '#4477AA',  # Medium blue
+    '#44AA99',  # Teal
+    '#CC6677',  # Soft red
+    '#88CCEE',  # Cyan
+    '#117733',  # Green
+    '#332288',  # Dark blue
+    '#661100',  # Brown
+    '#882255',  # Dark red
+    '#AA4466',  # Rose
+    '#6699CC',  # Light blue
+    '#AA4499',  # Purple
+]
+
+def load_prompts(filename):
+    prompts = []
+    with open(filename, 'r') as f: 
+        for line in f:
+            prompts.append(line.strip())
+    return prompts
+
 def load_llm_config(model_name):
     if model_name == "facebook/opt-125m":
         from transformers import AutoModelForCausalLM, AutoTokenizer
