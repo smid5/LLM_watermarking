@@ -1,10 +1,11 @@
 # plots the distribution of the cost of each generation type
 import seaborn as sns
 import matplotlib.pyplot as plt
+import scienceplots
 
 from .utils import load_llm_config, test_watermark
 
-num_tokens = 10
+num_tokens = 30
 k = 2
 b = 64
 
@@ -38,12 +39,11 @@ def plot_p_value_dist(filename):
         prompts, num_tokens, llm_config, f"simmark_{k}_{b}", detection_name, attack_name
     )
 
-        
-    # Plot KDE curves
-    plt.figure(figsize=(8, 6))
-    sns.kdeplot(p_values_nowatermark, label="No Watermarking", linewidth=2)
-    sns.kdeplot(p_values_simmark, label="SimMark", linewidth=2)
-    sns.kdeplot(p_values_modified_simmark, label="SimMark with 1 word change", linewidth=2)
+    # Plot the distribution of p-values
+    sns.histplot(p_values_nowatermark, label="No watermark", color="blue", kde=True)
+    sns.histplot(p_values_simmark, label="SimHash watermark", color="orange", kde=True)
+    sns.histplot(p_values_modified_simmark, label="SimHash watermark, modified", color="green", kde=True)
+
 
     # Labels and legend
     plt.xlabel(r"$p$-value")
@@ -52,7 +52,6 @@ def plot_p_value_dist(filename):
     plt.legend()
     plt.grid()
 
-    plt.savefig("figures/p_val_dist.png")
+    plt.savefig(f"figures/p_val_dist_simmark_{k}_{b}.pdf")
 
     # Show the plot
-    plt.show()    

@@ -66,7 +66,7 @@ def simmark_detect(text, config):
     
     avg_cost = 0
 
-    for i in range(len(ids)):
+    for i in range(prior_tokens, len(ids)):
         input_vector = embeddings[i-prior_tokens:i].mean(dim=0)
         min_cost = float('inf')
         for hash_idx in range(config['k']):

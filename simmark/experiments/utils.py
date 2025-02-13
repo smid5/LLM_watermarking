@@ -28,7 +28,7 @@ def extract_watermark_config(generation_name, watermark_config):
             b = int(generation_name.split("_")[2])
         watermark_config['k'] = k
         watermark_config['b'] = b
-        watermark_config['prior_tokens'] = 10
+        watermark_config['prior_tokens'] = 5
     elif method == "expmin":
         hash_len = 3
         if '_' in generation_name:
@@ -127,12 +127,10 @@ def test_watermark(prompts, num_tokens, llm_config, generation_name, detection_n
             if is_match:
                 p_values.append(cached_data['p_value'][idx])
                 continue
-        except KeyError:
+        except (KeyError, ValueError):
             pass
 
         generated_text = generate(prompt, num_tokens, llm_config, generation_name, seed=seed)
-        # Remove prompt from generated text
-        generated_text = generated_text[len(prompt):]
         if attack_name != "":
             attack_method = extract_attack(llm_config, attack_name)
             generated_text = attack_method(generated_text)
