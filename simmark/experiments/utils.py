@@ -1,6 +1,6 @@
 
 from ..methods import logit_processors, detection_methods
-from .attacks import modify_text
+from simmark.experiments.attacks import modify_text
 from transformers import LogitsProcessorList
 import torch
 import numpy as np
