@@ -33,7 +33,36 @@ python run.py
         |---simmark.py
 ```
 
-## Notes
+# Watermark Detection Experiments
 
-- When using the `test_watermark` method in the `simmark/experiments/utils.py` file, outputs are automatically cached in the `data` directory.
+This section contains information three Python scripts for analyzing the statistical properties of watermarked text using p-values. These experiments explore how modifications, sentence length, and different watermarking parameters affect p-value distributions.
+
+## Files and Descriptions
+
+### 1. `num_modifications_vs_p_value.py`
+- **Purpose:** Analyzes the effect of text modifications on SimHash p-values.
+- **Key Functions:**
+  - `plot_p_value_modifications()`: Plots the number of modifications against average p-values.
+  - `generate_p_value_modification_experiment()`: Runs the experiment by modifying text iteratively and testing the p-value.
+- **Output:** Saves a plot showing how modifications impact SimHash p-values.
+
+### 2. `sentence_length_vs_p_value.py`
+- **Purpose:** Examines how sentence length affects the median p-value under different watermarking conditions.
+- **Key Functions:**
+  - `plot_sentence_length_p_values()`: Generates a plot of sentence length versus median p-values.
+  - `generate_sentence_length_p_values()`: Runs experiments with different sentence lengths and compares p-values for:
+    - No watermark
+    - SimMark watermark
+    - SimMark with an attack
+- **Output:** Saves a plot displaying the relationship between sentence length and p-values.
+
+### 3. `k_and_b_heatmaps_pvalue.py`
+- **Purpose:** Generates heatmaps to analyze how different `k` and `b` values impact watermark detection p-values.
+- **Key Functions:**
+  - `plot_heatmap()`: Creates heatmaps to visualize p-values for different `k` and `b` values.
+  - `generate_p_value_heatmaps()`: Runs experiments on various `(k, b)` pairs to determine their influence on p-values.
+- **Output:** Saves heatmaps illustrating p-value distributions for:
+  - Watermarked text
+  - Unrelated text
+  - Attacked text
 
