@@ -65,7 +65,7 @@ def expmin_detect(text, config):
         avg_cost += min_cost / len(ids)
 
     shape = len(ids) 
-    scale = len(ids) * config['k']
-    p_value = gamma.cdf(avg_cost, shape, scale=scale)
+    rate = len(ids) * config['k']
+    p_value = gamma.cdf(avg_cost, shape, scale=1/rate)
 
     return p_value
