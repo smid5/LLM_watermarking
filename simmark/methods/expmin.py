@@ -3,11 +3,23 @@ import numpy as np
 import matplotlib.pyplot as plt
 import hashlib
 
+# def get_xi(prior_ids, hash_idx, seed, vocab_size):
+#     xi_seed = int(hashlib.sha256(hash_idx + bytes(seed) + bytes(prior_ids)).hexdigest(), 16)
+#     np.random.seed(xi_seed)
+#     xi = np.random.rand(vocab_size)
+#     return xi
+
 def get_xi(prior_ids, hash_idx, seed, vocab_size):
-    xi_seed = int(hashlib.sha256(hash_idx + bytes(seed) + bytes(prior_ids)).hexdigest(), 16)
+    xi_seed = int(hashlib.sha256(
+        bytes(str(hash_idx), 'utf-8') + 
+        bytes(str(seed), 'utf-8') + 
+        bytes(str(prior_ids), 'utf-8')
+    ).hexdigest(), 16) % (2**32 - 1)  # Ensure valid seed range
+
     np.random.seed(xi_seed)
     xi = np.random.rand(vocab_size)
     return xi
+
 
 class ExpMinProcessor(torch.nn.Module):
     def __init__(self, generation_config):
@@ -15,6 +27,7 @@ class ExpMinProcessor(torch.nn.Module):
         self.vocab_size = generation_config['vocab_size']
         self.seed = generation_config['seed']
         self.hash_len = generation_config['hash_len']
+        self.k = generation_config['k']  # Now self.k exists
 
     def forward(self, input_ids, logits):
         prior_ids = input_ids[0, -self.hash_len:].sum()

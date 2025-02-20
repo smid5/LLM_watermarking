@@ -54,10 +54,12 @@ def extract_watermark_config(generation_name, watermark_config):
         watermark_config['prior_tokens'] = 5
     elif method == "expmin":
         hash_len = 3
+        k = 8
         if '_' in generation_name:
             hash_len = int(generation_name.split("_")[1])
         watermark_config['hash_len'] = hash_len 
-
+        watermark_config['k'] = k
+        watermark_config['prior_tokens'] = 3
     elif method == "redgreen": pass
     elif method == "nomark": pass
     else:
