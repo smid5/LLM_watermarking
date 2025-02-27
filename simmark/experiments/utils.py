@@ -44,8 +44,9 @@ def load_llm_config(model_name):
 def extract_watermark_config(generation_name, watermark_config):
     method = generation_name.split("_")[0]
     watermark_config['method'] = method
+    k = 16
     if method == "simmark":
-        k, b = 10, 16
+        b = 30
         if '_' in generation_name:
             k = int(generation_name.split("_")[1])
             b = int(generation_name.split("_")[2])
@@ -53,8 +54,7 @@ def extract_watermark_config(generation_name, watermark_config):
         watermark_config['b'] = b
         watermark_config['prior_tokens'] = 5
     elif method == "expmin":
-        hash_len = 3
-        k = 8
+        hash_len = 10
         if '_' in generation_name:
             hash_len = int(generation_name.split("_")[1])
         watermark_config['hash_len'] = hash_len 
