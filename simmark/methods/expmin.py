@@ -95,12 +95,18 @@ def expmin_detect(text, config):
         # Accumulate the average cost normalized by the total number of ids considered
         avg_cost += min_cost / (len(ids) - prior_tokens)
 
+<<<<<<< HEAD
     # Gamma distribution parameters
     shape = len(ids) - prior_tokens
     scale = 1 / (len(ids) * config['k'])
 
     # Calculate the p-value using the gamma cumulative distribution function
     p_value = gamma.cdf(avg_cost, shape, scale=scale)
+=======
+    shape = len(ids) 
+    rate = len(ids) * config['k']
+    p_value = gamma.cdf(avg_cost, shape, scale=1/rate)
+>>>>>>> 3c3bcf5b00c48b4a10fa566ee2c1fb42cb20e149
 
     print(f"Detection cost: {avg_cost}, p-value: {p_value}")
     return p_value
