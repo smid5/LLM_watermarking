@@ -4,6 +4,7 @@ from simmark.experiments.num_modifications_vs_p_value import generate_p_value_mo
 from simmark.experiments.sentence_length_vs_p_value import generate_sentence_length_p_values
 
 filename = 'data/prompts.txt'
+
 plot_p_value_dist(k=2, b=64, num_tokens=30, filename=filename)
 plot_p_value_dist(k=4, b=64, num_tokens=30, filename=filename)
 plot_p_value_dist(k=8, b=64, num_tokens=30, filename=filename)
@@ -24,4 +25,3 @@ generate_p_value_modification_experiment(filename, k=k, b=b, num_modifications=n
 length_variations = list(range(25, 105, 5))
 num_modifications = 1
 generate_sentence_length_p_values(filename, k=k, b=b, num_modifications=num_modifications, length_variations=length_variations)
-

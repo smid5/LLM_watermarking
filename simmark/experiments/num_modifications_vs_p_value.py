@@ -11,7 +11,7 @@ from .utils import load_llm_config, test_watermark, load_prompts, modify_text, c
 def plot_p_value_modifications(modifications, p_values_dict, filename):
     plt.style.use(['science'])
     plt.figure(figsize=(6, 4))
-
+    
     # Iterate through each method and plot its data
     for idx, (label, values) in enumerate(p_values_dict.items()):
         plt.plot(modifications, values, marker='o', linestyle='-', color=cbcolors[idx], linewidth=2, label=label)
@@ -34,8 +34,10 @@ def generate_p_value_modification_experiment(filename, k=2, b=64, num_modificati
     # Dictionary to store p-values for each method
     p_values = {
         "SimMark": np.zeros(num_modifications),
-        "Red-Green": np.zeros(num_modifications),
-        "ExpMin": np.zeros(num_modifications)
+        "Unigram": np.zeros(num_modifications),
+        "SoftRedList": np.zeros(num_modifications),
+        "ExpMin": np.zeros(num_modifications),
+        "SynthID": np.zeros(num_modifications)
     }
     
     for prompt in prompts:
@@ -49,12 +51,20 @@ def generate_p_value_modification_experiment(filename, k=2, b=64, num_modificati
                 [output_modified], num_tokens, llm_config, f"simmark_{k}_{b}", f"simmark_{k}_{b}", f"modify_{i}"
             )[0]
 
-            p_values["Red-Green"][i] += test_watermark(
-                [output_modified], num_tokens, llm_config, "redgreen", "redgreen", f"modify_{i}"
+            p_values["Unigram"][i] += test_watermark(
+                [output_modified], num_tokens, llm_config, "unigram", "unigram", f"modify_{i}"
+            )[0]
+
+            p_values["SoftRedList"][i] += test_watermark(
+                [output_modified], num_tokens, llm_config, "softred", "softred", f"modify_{i}"
             )[0]
 
             p_values["ExpMin"][i] += test_watermark(
                 [output_modified], num_tokens, llm_config, "expmin_3", "expmin_3", f"modify_{i}"
+            )[0]
+
+            p_values["SynthID"][i] += test_watermark(
+                [output_modified], num_tokens, llm_config, "synthid", "synthid", f"modify_{i}"
             )[0]
     
     # Compute the average p-values across prompts
