@@ -1,6 +1,6 @@
 
 from ..methods import logit_processors, detection_methods
-from simmark.experiments.attacks import modify_text
+from simmark.experiments.attacks import modify_text, delete_text, insert_text  
 from transformers import LogitsProcessorList
 import torch
 import numpy as np
@@ -124,14 +124,42 @@ def read_data(filename):
                 outputs[key].append(line[key])
     return outputs
 
+# def extract_attack(llm_config, attack_name):
+#     if 'modify' in attack_name:
+#         num_modify = int(attack_name.split('_')[1])
+#         return lambda text : modify_text(
+#             llm_config['tokenizer'],
+#             llm_config['vocab_size'],
+#             text,
+#             num_modify=num_modify
+#         )
+#     else:
+#         raise ValueError(f"Unknown attack method: {attack_name}")
+
 def extract_attack(llm_config, attack_name):
-    if 'modify' in attack_name:
-        num_modify = int(attack_name.split('_')[1])
-        return lambda text : modify_text(
+    attack_parts = attack_name.split('_')
+    attack_type = attack_parts[0]
+    num_changes = int(attack_parts[1]) if len(attack_parts) > 1 else 1  # Default to 1 change
+
+    if attack_type == "modify":  # Substitution attack
+        return lambda text: modify_text(
             llm_config['tokenizer'],
             llm_config['vocab_size'],
             text,
-            num_modify=num_modify
+            num_modify=num_changes
+        )
+    elif attack_type == "delete":  # Deletion attack
+        return lambda text: delete_text(
+            llm_config['tokenizer'],
+            text,
+            num_delete=num_changes
+        )
+    elif attack_type == "insert":  # Insertion attack
+        return lambda text: insert_text(
+            llm_config['tokenizer'],
+            llm_config['vocab_size'],
+            text,
+            num_insert=num_changes
         )
     else:
         raise ValueError(f"Unknown attack method: {attack_name}")
