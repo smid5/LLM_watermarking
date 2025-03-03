@@ -44,8 +44,9 @@ def load_llm_config(model_name):
 def extract_watermark_config(generation_name, watermark_config):
     method = generation_name.split("_")[0]
     watermark_config['method'] = method
+    k = 16
     if method == "simmark":
-        k, b = 10, 16
+        b = 30
         if '_' in generation_name:
             k = int(generation_name.split("_")[1])
             b = int(generation_name.split("_")[2])
@@ -53,12 +54,24 @@ def extract_watermark_config(generation_name, watermark_config):
         watermark_config['b'] = b
         watermark_config['prior_tokens'] = 5
     elif method == "expmin":
-        hash_len = 3
+        hash_len = 10
         if '_' in generation_name:
             hash_len = int(generation_name.split("_")[1])
         watermark_config['hash_len'] = hash_len 
-
-    elif method == "redgreen": pass
+        watermark_config['k'] = k
+    elif method == "softred": 
+        n_gram = 2
+        if '_' in generation_name:
+            n_gram = int(generation_name.split('_')[1])
+        watermark_config['n_gram'] = n_gram
+    elif method == "synthid":
+        depth = 3
+        if '_' in generation_name:
+            depth = int(generation_name.split('_')[1])
+        watermark_config["hash_len"] = 3
+        watermark_config["depth"] = depth
+        watermark_config['k'] = k
+    elif method == "unigram": pass
     elif method == "nomark": pass
     else:
         raise ValueError(f"Unknown generation method: {generation_name}")
