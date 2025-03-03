@@ -42,6 +42,9 @@ class SimMarkProcessor(torch.nn.Module):
 
         input_vector = embeddings[-self.prior_tokens:].mean(dim=0)
 
+        # Change: Use sentence embedding vector on all prior tokens (not just self.prior_tokens of them)
+        # Link in slack for the sentence embedding library
+
         # Sample hash_idx
         hash_idx = np.random.randint(0, self.k)
         # Compute xi using input_vector, hash_idx, and seed
@@ -74,10 +77,10 @@ def simmark_detect(text, config):
             cost = -np.log(xi[ids[i]])
             min_cost = min(min_cost, cost)
 
-        avg_cost += min_cost / len(ids)
+        avg_cost += min_cost / (len(ids) - prior_tokens)
 
-    shape = len(ids) 
-    rate = len(ids) * config['k']
+    shape = len(ids) - prior_tokens
+    rate = (len(ids) - prior_tokens) * config['k']
     p_value = gamma.cdf(avg_cost, shape, scale=1/rate)
 
     print(f"Detection cost: {avg_cost}, p-value: {p_value}")

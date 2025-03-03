@@ -26,11 +26,11 @@ class ExpMinProcessor(torch.nn.Module):
         super().__init__()
         self.vocab_size = generation_config['vocab_size']
         self.seed = generation_config['seed']
-        self.hash_len = generation_config['hash_len']
+        self.prior_tokens = generation_config['prior_tokens']
         self.k = generation_config['k']  # Now self.k exists
 
     def forward(self, input_ids, logits):
-        prior_ids = input_ids[0, -self.hash_len:].sum()
+        prior_ids = input_ids[0, -self.prior_tokens:].sum()
         # Sample hash_idx
         hash_idx = np.random.randint(0, self.k)
         # hash_idx = int(hashlib.sha256(bytes(str(prior_ids), 'utf-8')).hexdigest(), 16) % self.k
@@ -49,13 +49,14 @@ from scipy.stats import gamma
 
 def expmin_detect(text, config):
     ids = config['tokenizer'].encode(text, return_tensors="pt").squeeze()
+    #prior_tokens = config['prior_tokens']
     prior_tokens = config['prior_tokens']
     with torch.no_grad():
         embeddings = config['model'].model.decoder.embed_tokens(ids)
     
     avg_cost = 0
 
-    for i in range(len(ids)):
+    for i in range(prior_tokens, len(ids)):
         prior_ids = ids[i-prior_tokens:i] # If i < prior_tokens, this results in an out-of-bounds slice
         min_cost = float('inf')
         for hash_idx in range(config['k']):            
@@ -63,11 +64,11 @@ def expmin_detect(text, config):
             cost = -np.log(xi[ids[i]])
             min_cost = min(min_cost, cost)
 
-        avg_cost += min_cost / len(ids)
+        avg_cost += min_cost / (len(ids) - prior_tokens)
 
-    shape = len(ids) 
-    scale = len(ids) * config['k']
-    p_value = gamma.cdf(avg_cost, shape, scale=scale)
+    shape = len(ids) - prior_tokens
+    rate = (len(ids) - prior_tokens) * config['k']
+    p_value = gamma.cdf(avg_cost, shape, scale=1/rate)
 
     print(f"Detection cost: {avg_cost}, p-value: {p_value}")
     return p_value
