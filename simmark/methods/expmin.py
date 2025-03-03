@@ -26,13 +26,14 @@ class ExpMinProcessor(torch.nn.Module):
         super().__init__()
         self.vocab_size = generation_config['vocab_size']
         self.seed = generation_config['seed']
-        self.hash_len = generation_config['hash_len']
+        self.prior_tokens = generation_config['prior_tokens']
         self.k = generation_config['k']  # Now self.k exists
 
     def forward(self, input_ids, logits):
-        prior_ids = input_ids[0, -self.hash_len:].sum()
+        prior_ids = input_ids[0, -self.prior_tokens:].sum()
         # Sample hash_idx
         hash_idx = np.random.randint(0, self.k)
+        # hash_idx = int(hashlib.sha256(bytes(str(prior_ids), 'utf-8')).hexdigest(), 16) % self.k
         xi = get_xi(prior_ids, hash_idx, self.seed, self.vocab_size)
          
         probs = logits[0].softmax(dim=-1)         
@@ -74,16 +75,15 @@ from scipy.stats import gamma
 
 def expmin_detect(text, config):
     ids = config['tokenizer'].encode(text, return_tensors="pt").squeeze()
+    #prior_tokens = config['prior_tokens']
+    prior_tokens = config['prior_tokens']
     with torch.no_grad():
         embeddings = config['model'].model.decoder.embed_tokens(ids)
     
     avg_cost = 0
 
-    # Assuming 'prior_tokens' is defined in 'config' similar to SimMark
-    hash_len = config['hash_len']
-    for i in range(hash_len, len(ids)):
-        # Extract the embeddings for the prior tokens window
-        prior_ids = ids[i-hash_len:i].tolist()  # convert tensor to list for hashing
+    for i in range(prior_tokens, len(ids)):
+        prior_ids = ids[i-prior_tokens:i] # If i < prior_tokens, this results in an out-of-bounds slice
         min_cost = float('inf')
         
         # Compute the minimum cost for each hash_idx within the window
@@ -92,15 +92,12 @@ def expmin_detect(text, config):
             cost = -np.log(xi[ids[i].item()])  # Get the cost for the actual token id
             min_cost = min(min_cost, cost)
 
-        # Accumulate the average cost normalized by the total number of ids considered
-        avg_cost += min_cost / (len(ids) - hash_len)
+        avg_cost += min_cost / (len(ids) - prior_tokens)
 
-    # Gamma distribution parameters
-    shape = len(ids) - hash_len
-    scale = 1 / (len(ids) * config['k'])
-
-    # Calculate the p-value using the gamma cumulative distribution function
-    p_value = gamma.cdf(avg_cost, shape, scale=scale)
+    shape = len(ids) - prior_tokens
+    rate = (len(ids) - prior_tokens) * config['k']
+    p_value = gamma.cdf(avg_cost, shape, scale=1/rate)
 
     print(f"Detection cost: {avg_cost}, p-value: {p_value}")
     return p_value
+
