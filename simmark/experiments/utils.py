@@ -1,6 +1,6 @@
 
 from ..methods import logit_processors, detection_methods
-from simmark.experiments.attacks import modify_text, delete_text, insert_text  
+from simmark.experiments.attacks import modify_text, delete_text, insert_text, translate_text
 from transformers import LogitsProcessorList
 import torch
 import numpy as np
@@ -171,6 +171,13 @@ def extract_attack(llm_config, attack_name):
             llm_config['vocab_size'],
             text,
             num_insert=num_changes
+        )
+    elif attack_type == "translate": # Translation attack
+        return lambda text: translate_text(
+            llm_config['tokenizer'],
+            llm_config['vocab_size'],
+            text,
+            num_modify=num_changes
         )
     else:
         raise ValueError(f"Unknown attack method: {attack_name}")
