@@ -30,7 +30,7 @@ def generate_sentence_length_p_values(filename, k=2, b=64, num_modifications=1, 
     llm_config = load_llm_config('facebook/opt-125m')
     prompts = load_prompts(filename=filename)
     
-    p_values = {"No Watermark": {}, "SimMark": {}, "SimMark + Attack": {}, "Red-Green": {}, "ExpMin": {}}
+    p_values = {"No Watermark": {}, "SimMark": {}, "SimMark + Attack": {}, "SoftRedList": {}, "Unigram": {}, "ExpMin": {}, "SynthID": {}}
     
     for length in length_variations:
         applicable_prompts = [p for p in prompts if len(p.split()) < length]
@@ -54,13 +54,23 @@ def generate_sentence_length_p_values(filename, k=2, b=64, num_modifications=1, 
              for p, num_tokens in zip(applicable_prompts, num_tokens_list)]
         )
         
-        p_values["Red-Green"][length] = np.mean(
-            [test_watermark([p], num_tokens, llm_config, "redgreen", "redgreen")[0] 
+        p_values["SoftRedList"][length] = np.mean(
+            [test_watermark([p], num_tokens, llm_config, "softred", "softred")[0] 
+             for p, num_tokens in zip(applicable_prompts, num_tokens_list)]
+        )
+
+        p_values["Unigram"][length] = np.mean(
+            [test_watermark([p], num_tokens, llm_config, "unigram", "unigram")[0] 
              for p, num_tokens in zip(applicable_prompts, num_tokens_list)]
         )
         
         p_values["ExpMin"][length] = np.mean(
             [test_watermark([p], num_tokens, llm_config, "expmin_3", "expmin_3")[0] 
+             for p, num_tokens in zip(applicable_prompts, num_tokens_list)]
+        )
+
+        p_values["SynthID"][length] = np.mean(
+            [test_watermark([p], num_tokens, llm_config, "synthid", "synthid")[0] 
              for p, num_tokens in zip(applicable_prompts, num_tokens_list)]
         )
     

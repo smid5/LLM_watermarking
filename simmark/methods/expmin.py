@@ -45,6 +45,32 @@ class ExpMinProcessor(torch.nn.Module):
         
         return logits  
 
+# from scipy.stats import gamma
+
+# def expmin_detect(text, config):
+#     ids = config['tokenizer'].encode(text, return_tensors="pt").squeeze()
+#     prior_tokens = config['prior_tokens']
+#     with torch.no_grad():
+#         embeddings = config['model'].model.decoder.embed_tokens(ids)
+    
+#     avg_cost = 0
+
+#     for i in range(len(ids)):
+#         prior_ids = ids[i-prior_tokens:i]
+#         min_cost = float('inf')
+#         for hash_idx in range(config['k']):            
+#             xi = get_xi(prior_ids, hash_idx, config['seed'], config['vocab_size'])
+#             cost = -np.log(xi[ids[i]])
+#             min_cost = min(min_cost, cost)
+
+#         avg_cost += min_cost / len(ids)
+
+#     shape = len(ids) 
+#     scale = len(ids) * config['k']
+#     p_value = gamma.cdf(avg_cost, shape, scale=scale)
+
+#     return p_value
+
 from scipy.stats import gamma
 
 def expmin_detect(text, config):
@@ -59,9 +85,11 @@ def expmin_detect(text, config):
     for i in range(prior_tokens, len(ids)):
         prior_ids = ids[i-prior_tokens:i] # If i < prior_tokens, this results in an out-of-bounds slice
         min_cost = float('inf')
-        for hash_idx in range(config['k']):            
+        
+        # Compute the minimum cost for each hash_idx within the window
+        for hash_idx in range(config['k']):
             xi = get_xi(prior_ids, hash_idx, config['seed'], config['vocab_size'])
-            cost = -np.log(xi[ids[i]])
+            cost = -np.log(xi[ids[i].item()])  # Get the cost for the actual token id
             min_cost = min(min_cost, cost)
 
         avg_cost += min_cost / (len(ids) - prior_tokens)

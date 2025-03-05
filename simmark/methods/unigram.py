@@ -12,7 +12,7 @@ def adjust_logits(logits, green_list, bias_factor = 6):
     return logits + bias_factor * green_list
 
 # A Logits Processor that adjusts the logits so tokens in the green list are favored
-class RedGreenProcessor(torch.nn.Module):
+class UnigramProcessor(torch.nn.Module):
     def __init__(self, generation_config):
         super().__init__()
         # Generate binary green vector
@@ -22,7 +22,7 @@ class RedGreenProcessor(torch.nn.Module):
 
 # Detects whether text was likely generated using red/green list technique
 
-def redgreen_detect(text, detection_config):
+def unigram_detect(text, detection_config):
     green = generate_green(detection_config['vocab_size'], detection_config['seed'])
 
     num_green = 0

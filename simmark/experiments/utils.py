@@ -1,6 +1,6 @@
 
 from ..methods import logit_processors, detection_methods
-from simmark.experiments.attacks import modify_text, delete_text, insert_text  
+from simmark.experiments.attacks import modify_text, delete_text, insert_text, translate_text
 from transformers import LogitsProcessorList
 import torch
 import numpy as np
@@ -59,8 +59,19 @@ def extract_watermark_config(generation_name, watermark_config):
             hash_len = int(generation_name.split("_")[1])
         watermark_config['hash_len'] = hash_len 
         watermark_config['k'] = k
-        watermark_config['prior_tokens'] = 3
-    elif method == "redgreen": pass
+    elif method == "softred": 
+        n_gram = 2
+        if '_' in generation_name:
+            n_gram = int(generation_name.split('_')[1])
+        watermark_config['n_gram'] = n_gram
+    elif method == "synthid":
+        depth = 3
+        if '_' in generation_name:
+            depth = int(generation_name.split('_')[1])
+        watermark_config["hash_len"] = 3
+        watermark_config["depth"] = depth
+        watermark_config['k'] = k
+    elif method == "unigram": pass
     elif method == "nomark": pass
     else:
         raise ValueError(f"Unknown generation method: {generation_name}")
@@ -160,6 +171,13 @@ def extract_attack(llm_config, attack_name):
             llm_config['vocab_size'],
             text,
             num_insert=num_changes
+        )
+    elif attack_type == "translate": # Translation attack
+        return lambda text: translate_text(
+            llm_config['tokenizer'],
+            llm_config['vocab_size'],
+            text,
+            num_modify=num_changes
         )
     else:
         raise ValueError(f"Unknown attack method: {attack_name}")
