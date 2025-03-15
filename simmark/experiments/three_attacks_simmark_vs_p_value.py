@@ -18,7 +18,7 @@ def plot_p_value_modifications(modifications, p_values_dict, filename):
 
     plt.yscale("log")  # Set y-axis to log scale for better visualization
     plt.xlabel("Number of Modifications")
-    plt.ylabel("Median p-Value")
+    plt.ylabel("Average p-Value")
     plt.title("Effect of Different Modification Types on SimMark p-Values")
     plt.legend()
     plt.grid()

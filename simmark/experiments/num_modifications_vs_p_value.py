@@ -74,5 +74,5 @@ def generate_p_value_modification_experiment(filename, k=2, b=64, num_modificati
     # Generate plot
     plot_p_value_modifications(modifications, p_values, f"figures/p_value_vs_modifications_k{k}_b{b}.pdf")
 
-if __name__ == '__main__':
-    generate_p_value_modification_experiment("sentence_starters.txt")
+# if __name__ == '__main__':
+#     generate_p_value_modification_experiment("sentence_starters.txt")

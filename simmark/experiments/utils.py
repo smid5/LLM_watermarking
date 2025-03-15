@@ -54,10 +54,10 @@ def extract_watermark_config(generation_name, watermark_config):
         watermark_config['b'] = b
         watermark_config['prior_tokens'] = 5
     elif method == "expmin":
-        hash_len = 10
+        prior_tokens = 10
         if '_' in generation_name:
-            hash_len = int(generation_name.split("_")[1])
-        watermark_config['hash_len'] = hash_len 
+            prior_tokens = int(generation_name.split("_")[1])
+        watermark_config['prior_tokens'] = prior_tokens 
         watermark_config['k'] = k
     elif method == "softred": 
         n_gram = 2
