@@ -26,7 +26,8 @@ def generate_p_value_heatmaps(k_values, b_values, num_tokens, filename):
     
     p_values_watermark = np.zeros((len(k_values), len(b_values)))
     p_values_unrelated = np.zeros((len(k_values), len(b_values)))
-    p_values_attacked = np.zeros((len(k_values), len(b_values)))
+    p_values_modified = np.zeros((len(k_values), len(b_values)))
+    p_values_translated = np.zeros((len(k_values), len(b_values)))
     
     for i, k in enumerate(k_values):
         for j, b in enumerate(b_values):
@@ -45,10 +46,15 @@ def generate_p_value_heatmaps(k_values, b_values, num_tokens, filename):
             ))
             
             # print("modify")
-            p_values_attacked[i, j] = np.mean(test_watermark(
+            p_values_modified[i, j] = np.mean(test_watermark(
                 prompts, num_tokens, llm_config, f"simmark_{k}_{b}", detection_name, "modify_1"
+            ))
+
+            p_values_translated[i, j] = np.mean(test_watermark(
+                prompts, num_tokens, llm_config, f"simmark_{k}_{b}", detection_name, "translate"
             ))
     
     plot_heatmap(p_values_watermark, k_values, b_values, "p-Values for Watermarked Text", "figures/heatmap_watermark.pdf")
     plot_heatmap(p_values_unrelated, k_values, b_values, "p-Values for Unrelated Text", "figures/heatmap_unrelated.pdf")
-    plot_heatmap(p_values_attacked, k_values, b_values, "p-Values for Attacked Text", "figures/heatmap_attacked.pdf")
+    plot_heatmap(p_values_modified, k_values, b_values, "p-Values for Modified Text", "figures/heatmap_modified.pdf")
+    plot_heatmap(p_values_translated, k_values, b_values, "p-Values for Translated Text", "figures/heatmap_translated.pdf")

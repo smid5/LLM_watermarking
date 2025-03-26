@@ -38,37 +38,25 @@ def generate_simmark_modification_experiment(filename, k=2, b=64, num_modificati
         "SimMark - Deletion": np.zeros(num_modifications),
         "SimMark - Translation": np.zeros(num_modifications)
     }
-    
-    for prompt in prompts:
-        print(f"Processing: {prompt}")
 
-        for i in range(num_modifications):
-            # Apply different modification types
-            output_substitution = modify_text(llm_config['tokenizer'], llm_config['vocab_size'], prompt, i)
-            output_insertion = insert_text(llm_config['tokenizer'], llm_config['vocab_size'], prompt, i)
-            output_deletion = delete_text(llm_config['tokenizer'], prompt, i)
-            output_translation = translate_text(llm_config["tokenizer"], llm_config["vocab_size"], prompt, translate_whole=False, num_modify=i)
+    for i in range(num_modifications):
 
-            # Compute p-values for each modification type
-            p_values["SimMark - Substitution"][i] += test_watermark(
-                [output_substitution], num_tokens, llm_config, f"simmark_{k}_{b}", f"simmark_{k}_{b}", f"modify_{i}"
-            )[0]
+        # Compute p-values for each modification type
+        p_values["SimMark - Substitution"][i] += np.mean(test_watermark(
+            prompts, num_tokens, llm_config, f"simmark_{k}_{b}", f"simmark_{k}_{b}", f"modify_{i}"
+        ))
 
-            p_values["SimMark - Insertion"][i] += test_watermark(
-                [output_insertion], num_tokens, llm_config, f"simmark_{k}_{b}", f"simmark_{k}_{b}", f"insert_{i}"
-            )[0]
+        p_values["SimMark - Insertion"][i] += np.mean(test_watermark(
+            prompts, num_tokens, llm_config, f"simmark_{k}_{b}", f"simmark_{k}_{b}", f"insert_{i}"
+        ))
 
-            p_values["SimMark - Deletion"][i] += test_watermark(
-                [output_deletion], num_tokens, llm_config, f"simmark_{k}_{b}", f"simmark_{k}_{b}", f"delete_{i}"
-            )[0]
+        p_values["SimMark - Deletion"][i] += np.mean(test_watermark(
+            prompts, num_tokens, llm_config, f"simmark_{k}_{b}", f"simmark_{k}_{b}", f"delete_{i}"
+        ))
 
-            p_values["SimMark - Translation"][i] += test_watermark(
-                [output_translation], num_tokens, llm_config, f"simmark_{k}_{b}", f"simmark_{k}_{b}", f"translate_{i}"
-            )[0]
-    
-    # Compute the average p-values across prompts
-    for key in p_values:
-        p_values[key] /= len(prompts)
+        p_values["SimMark - Translation"][i] += np.mean(test_watermark(
+            prompts, num_tokens, llm_config, f"simmark_{k}_{b}", f"simmark_{k}_{b}", f"translate_{i}"
+        ))
 
     # Generate plot
     plot_p_value_modifications(modifications, p_values, f"figures/simmark_p_value_vs_modifications_k{k}_b{b}.pdf")

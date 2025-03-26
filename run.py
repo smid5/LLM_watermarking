@@ -4,6 +4,7 @@ from simmark.experiments.num_modifications_vs_p_value import generate_p_value_mo
 from simmark.experiments.sentence_length_vs_p_value import generate_sentence_length_p_values
 from simmark.experiments.three_attacks_simmark_vs_p_value import generate_simmark_modification_experiment
 from simmark.experiments.test_expmin_nowater import generate_simmark_vs_expmin_p_values
+from simmark.experiments.translation_p_value_dist import translation_p_value_violin, plot_p_value_dist_translation
 
 filename = 'data/prompts.txt'
 plot_p_value_dist(k=2, b=64, num_tokens=30, filename=filename)
@@ -31,3 +32,7 @@ generate_sentence_length_p_values(filename, k=k, b=b, num_modifications=num_modi
 
 generate_simmark_vs_expmin_p_values(filename, k=k, b=b, length_variations=length_variations)
 
+translation_p_value_violin(k=5, b=8, num_tokens=50, filename=filename)
+
+plot_p_value_dist_translation("simmark_5_8", 50, filename) 
+plot_p_value_dist_translation("simmark_5_8", 100, filename) #these seem to be working the best

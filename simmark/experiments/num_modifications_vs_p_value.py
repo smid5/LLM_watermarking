@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import scienceplots
 import numpy as np
 
-from .utils import load_llm_config, test_watermark, load_prompts, modify_text, cbcolors, linestyles
+from .utils import test_watermark, load_llm_config, load_prompts, modify_text, cbcolors, linestyles
 
 def plot_p_value_modifications(modifications, p_values_dict, filename):
     plt.style.use(['science'])
@@ -39,37 +39,29 @@ def generate_p_value_modification_experiment(filename, k=2, b=64, num_modificati
         "ExpMin": np.zeros(num_modifications),
         "SynthID": np.zeros(num_modifications)
     }
-    
-    for prompt in prompts:
-        print(f"Processing: {prompt}")
 
-        for i in range(num_modifications):
-            output_modified = modify_text(llm_config['tokenizer'], llm_config['vocab_size'], prompt, i)
+    for i in range(num_modifications):
 
-            # Compute p-values for each method
-            p_values["SimMark"][i] += test_watermark(
-                [output_modified], num_tokens, llm_config, f"simmark_{k}_{b}", f"simmark_{k}_{b}", f"modify_{i}"
-            )[0]
+        # Compute p-values for each method
+        p_values["SimMark"][i] = np.mean(test_watermark(
+            prompts, num_tokens, llm_config, f"simmark_{k}_{b}", f"simmark_{k}_{b}", f"modify_{i}"
+        ))
 
-            p_values["Unigram"][i] += test_watermark(
-                [output_modified], num_tokens, llm_config, "unigram", "unigram", f"modify_{i}"
-            )[0]
+        p_values["Unigram"][i] = np.mean(test_watermark(
+            prompts, num_tokens, llm_config, "unigram", "unigram", f"modify_{i}"
+        ))
 
-            p_values["SoftRedList"][i] += test_watermark(
-                [output_modified], num_tokens, llm_config, "softred", "softred", f"modify_{i}"
-            )[0]
+        p_values["SoftRedList"][i] = np.mean(test_watermark(
+            prompts, num_tokens, llm_config, "softred", "softred", f"modify_{i}"
+        ))
 
-            p_values["ExpMin"][i] += test_watermark(
-                [output_modified], num_tokens, llm_config, "expmin_3", "expmin_3", f"modify_{i}"
-            )[0]
+        p_values["ExpMin"][i] = np.mean(test_watermark(
+            prompts, num_tokens, llm_config, "expmin_3", "expmin_3", f"modify_{i}"
+        ))
 
-            p_values["SynthID"][i] += test_watermark(
-                [output_modified], num_tokens, llm_config, "synthid", "synthid", f"modify_{i}"
-            )[0]
-    
-    # Compute the average p-values across prompts
-    for key in p_values:
-        p_values[key] /= len(prompts)
+        p_values["SynthID"][i] = np.mean(test_watermark(
+            prompts, num_tokens, llm_config, "synthid", "synthid", f"modify_{i}"
+        ))
 
     # Generate plot
     plot_p_value_modifications(modifications, p_values, f"figures/p_value_vs_modifications_k{k}_b{b}.pdf")

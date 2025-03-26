@@ -83,7 +83,7 @@ def expmin_detect(text, config):
     avg_cost = 0
 
     for i in range(prior_tokens, len(ids)):
-        prior_ids = ids[i-prior_tokens:i] # If i < prior_tokens, this results in an out-of-bounds slice
+        prior_ids = ids[i-prior_tokens:i].sum() # If i < prior_tokens, this results in an out-of-bounds slice
         min_cost = float('inf')
         
         # Compute the minimum cost for each hash_idx within the window

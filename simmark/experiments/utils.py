@@ -52,7 +52,7 @@ def extract_watermark_config(generation_name, watermark_config):
             b = int(generation_name.split("_")[2])
         watermark_config['k'] = k
         watermark_config['b'] = b
-        watermark_config['prior_tokens'] = 5
+        watermark_config['transformer_model'] = 'all-MiniLM-L6-v2'
     elif method == "expmin":
         prior_tokens = 10
         if '_' in generation_name:
@@ -65,10 +65,10 @@ def extract_watermark_config(generation_name, watermark_config):
             n_gram = int(generation_name.split('_')[1])
         watermark_config['n_gram'] = n_gram
     elif method == "synthid":
-        depth = 3
+        depth = 30 # follow original paper
         if '_' in generation_name:
             depth = int(generation_name.split('_')[1])
-        watermark_config["hash_len"] = 3
+        watermark_config["prior_tokens"] = 3
         watermark_config["depth"] = depth
         watermark_config['k'] = k
     elif method == "unigram": pass
@@ -83,6 +83,7 @@ def generate(text_start, num_tokens, llm_config, generation_name, seed=42):
         'vocab_size': llm_config['vocab_size'],
         'model' : llm_config['model'],
         'seed' : seed,
+        'tokenizer' : llm_config['tokenizer']
     }
     gen_config = extract_watermark_config(generation_name, gen_config)
     
@@ -151,6 +152,7 @@ def extract_attack(llm_config, attack_name):
     attack_parts = attack_name.split('_')
     attack_type = attack_parts[0]
     num_changes = int(attack_parts[1]) if len(attack_parts) > 1 else 1  # Default to 1 change
+    translate_whole = False if len(attack_parts) > 1 else True # Default to translating whole text, otherwise translate token-wise
 
     if attack_type == "modify":  # Substitution attack
         return lambda text: modify_text(
@@ -176,7 +178,8 @@ def extract_attack(llm_config, attack_name):
         return lambda text: translate_text(
             llm_config['tokenizer'],
             llm_config['vocab_size'],
-            text,
+            text, 
+            translate_whole=translate_whole,
             num_modify=num_changes
         )
     else:
