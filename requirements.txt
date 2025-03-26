@@ -4,3 +4,4 @@ torch
 transformers
 scipy
 scienceplots
+sentence-transformers

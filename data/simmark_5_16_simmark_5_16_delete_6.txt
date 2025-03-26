@@ -1,1 +1,0 @@
-{'prompt': '', 'generated_text': 'There was keyboard link other day and it appeared I did in that place. Plus why is theFundMe so sudden\n this in someones voice', 'p_value': np.float64(0.006862492433685888), 'seed': 42, 'num_tokens': 100}

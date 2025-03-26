@@ -1,1 +1,0 @@
-{'prompt': '', 'generated_text': 'Is this pro Egypt baby?\n all seem normal. its called the gold instead of the ordinary watch is amazing.', 'p_value': np.float64(0.034313221738550184), 'seed': 42, 'num_tokens': 100}
