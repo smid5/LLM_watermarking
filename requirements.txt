@@ -5,3 +5,4 @@ transformers
 scipy
 scienceplots
 sentence-transformers
+sentencepiece

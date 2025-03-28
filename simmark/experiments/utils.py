@@ -1,7 +1,7 @@
 
 from ..methods import logit_processors, detection_methods
 from simmark.experiments.attacks import modify_text, delete_text, insert_text, translate_text
-from transformers import LogitsProcessorList
+from transformers import LogitsProcessorList, TemperatureLogitsWarper, TopKLogitsWarper, TopPLogitsWarper
 import torch
 import numpy as np
 
@@ -77,7 +77,7 @@ def extract_watermark_config(generation_name, watermark_config):
         raise ValueError(f"Unknown generation method: {generation_name}")
     return watermark_config
 
-def generate(text_start, num_tokens, llm_config, generation_name, seed=42):
+def generate(text_start, num_tokens, llm_config, generation_name, seed=42, temperature=1.8, top_k=50, top_p=0.9):
     # Extract generation configuration
     gen_config = {
         'vocab_size': llm_config['vocab_size'],
@@ -96,8 +96,12 @@ def generate(text_start, num_tokens, llm_config, generation_name, seed=42):
     outputs = llm_config['model'].generate(
         input_ids,
         max_new_tokens=num_tokens,
+        # do_sample=True,
         logits_processor=LogitsProcessorList([logit_processor]),
         pad_token_id=llm_config['tokenizer'].eos_token_id
+        # temperature=temperature,
+        # top_p=top_p,
+        # top_k=top_k
     )
     print('Generation complete!')
 
@@ -193,14 +197,22 @@ def test_watermark(prompts, num_tokens, llm_config, generation_name, detection_n
     for prompt in prompts:
         # Check if prompt and seed is already in cached data
         try:
-            idx = cached_data['prompt'].index(prompt)
-            is_match = True
-            for match in matches:
-                if cached_data[match][idx] != locals()[match]:
-                    is_match = False
+            # Find all indices where the prompt matches
+            indices = [i for i, p in enumerate(cached_data['prompt']) if p == prompt]
+
+            is_match = len(indices)>0
+            # Check if any of those indices match seed and num_tokens
+            for idx in indices:
+                is_match = True
+                for match in matches:
+                    if cached_data[match][idx] != locals()[match]:
+                        is_match = False
+                if is_match:
+                    p_values.append(cached_data['p_value'][idx])
+                    break
+
             if is_match:
-                p_values.append(cached_data['p_value'][idx])
-                continue
+                continue  # Skip generating text if we found a cached match
         except (KeyError, ValueError):
             pass
 

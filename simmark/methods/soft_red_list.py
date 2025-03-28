@@ -3,12 +3,13 @@ import numpy as np
 from scipy.stats import binom
 
 def generate_green(vocab_size, seed, input_ids):
+    # print(f"seed: {seed} input_ids: {input_ids.sum().item()}")
     rng = np.random.default_rng(seed*input_ids.sum().item())
     return rng.integers(low=0, high=2, size=vocab_size)
 
 # A function that adjusts the logits so that tokens in the green list have a higher value compared to tokens in the red
 # Used within GreenPreferenceProcessor
-def adjust_logits(logits, green_list, bias_factor = 6):
+def adjust_logits(logits, green_list, bias_factor = 2):
     return logits + bias_factor * torch.tensor(green_list)
 
 # A Logits Processor that adjusts the logits so tokens in the green list are favored
@@ -20,8 +21,9 @@ class SoftRedProcessor(torch.nn.Module):
         self.n_gram_size = generation_config['n_gram']
         # Generate binary green vector
     def forward(self, input_ids, scores):
+        # print(f"ids of generation: {input_ids[0]}")
 
-        green = generate_green(self.vocab_size, self.seed, input_ids[-(self.n_gram_size - 1):])
+        green = generate_green(self.vocab_size, self.seed, input_ids[0, -(self.n_gram_size - 1):])
   
         return adjust_logits(scores, green)
 
@@ -33,7 +35,8 @@ def softred_detect(text, detection_config):
     n_gram_size = detection_config['n_gram']
 
     num_green = 0
-    ids = detection_config['tokenizer'].encode(text, return_tensors="pt")[0]
+    ids = detection_config['tokenizer'].encode(text, return_tensors="pt").squeeze()
+    # print(F"ids: {ids}")
     for i in range(n_gram_size-1, len(ids)):
         green = generate_green(vocab_size, seed, ids[i-n_gram_size+1:i])
         if green[ids[i]]:

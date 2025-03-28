@@ -16,8 +16,8 @@ def get_xi(prior_ids, hash_idx, seed, vocab_size):
         bytes(str(prior_ids), 'utf-8')
     ).hexdigest(), 16) % (2**32 - 1)  # Ensure valid seed range
 
-    np.random.seed(xi_seed)
-    xi = np.random.rand(vocab_size)
+    rng = np.random.default_rng(xi_seed)
+    xi = rng.random(vocab_size)
     return xi
 
 
@@ -32,7 +32,8 @@ class ExpMinProcessor(torch.nn.Module):
     def forward(self, input_ids, logits):
         prior_ids = input_ids[0, -self.prior_tokens:].sum()
         # Sample hash_idx
-        hash_idx = np.random.randint(0, self.k)
+        rng = np.random.default_rng()
+        hash_idx = rng.integers(self.k)
         # hash_idx = int(hashlib.sha256(bytes(str(prior_ids), 'utf-8')).hexdigest(), 16) % self.k
         xi = get_xi(prior_ids, hash_idx, self.seed, self.vocab_size)
          

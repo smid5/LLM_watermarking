@@ -35,7 +35,7 @@ def plot_p_value_dist(k, b, num_tokens, filename):
     # Labels and legend
     plt.xscale("log")
     for idx, key in enumerate(p_values):
-        sns.kdeplot(p_values[key], label=key, log_scale=True, linewidth=2, color=cbcolors[idx], linestyle=linestyles[idx])
+        sns.kdeplot(p_values[key], label=key, log_scale=True, linewidth=2, color=cbcolors[idx], linestyle=linestyles[idx], cut=0)
     
     plt.xlabel(r"$p$-value")
     plt.ylabel("Frequency")

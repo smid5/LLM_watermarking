@@ -6,9 +6,9 @@ from sentence_transformers import SentenceTransformer
 
 def simhash(input_vector, hash_idx, vocab_size, seed, k, b):
     # Use seed and ell to sample b Gaussian vectors r_1, …, r_b in R^d
-    np.random.seed(hash_idx + k * seed)
+    rng = np.random.default_rng(hash_idx + k * seed)
     embed_dim = input_vector.shape[0]
-    random_vectors = np.random.randn(b, embed_dim)
+    random_vectors = rng.standard_normal((b, embed_dim))
 
     # Apply SimHash to input_vector
     projections = random_vectors @ input_vector
@@ -19,8 +19,8 @@ def simhash(input_vector, hash_idx, vocab_size, seed, k, b):
     16)
 
     # Use simhash_seed to sample xi ~ Unif[(0,1)^vocab size]
-    np.random.seed(simhash_seed % 2**32)
-    xi = np.random.rand(vocab_size)
+    rng = np.random.default_rng(simhash_seed % 2**32)
+    xi = rng.random(vocab_size)
 
     return xi
 
@@ -48,7 +48,8 @@ class SimMarkProcessor(torch.nn.Module):
         # Link in slack for the sentence embedding library
 
         # Sample hash_idx
-        hash_idx = np.random.randint(0, self.k)
+        rng = np.random.default_rng()
+        hash_idx = rng.integers(self.k)
         # Compute xi using input_vector, hash_idx, and seed
         xi = simhash(input_vector, hash_idx, self.vocab_size, self.seed, self.k, self.b)
  

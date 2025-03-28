@@ -3,8 +3,8 @@ import numpy as np
 from scipy.stats import binom
 
 def generate_green(vocab_size, seed):
-    np.random.seed(seed)
-    return np.random.choice([0, 1], vocab_size, p=[0.5, 0.5])
+    rng = np.random.default_rng(seed)
+    return rng.integers(low=0, high=2, size=vocab_size)
 
 # A function that adjusts the logits so that tokens in the green list have a higher value compared to tokens in the red
 # Used within GreenPreferenceProcessor
@@ -18,7 +18,7 @@ class UnigramProcessor(torch.nn.Module):
         # Generate binary green vector
         self.green = generate_green(generation_config['vocab_size'], generation_config['seed'])
     def forward(self, input_ids, scores):
-        return adjust_logits(scores[0], self.green).unsqueeze(0)
+        return adjust_logits(scores, self.green)
 
 # Detects whether text was likely generated using red/green list technique
 
@@ -26,7 +26,7 @@ def unigram_detect(text, detection_config):
     green = generate_green(detection_config['vocab_size'], detection_config['seed'])
 
     num_green = 0
-    ids = detection_config['tokenizer'].encode(text, return_tensors="pt")[0]
+    ids = detection_config['tokenizer'].encode(text, return_tensors="pt").squeeze()
     for token in ids:
         if green[token]:
             num_green += 1
