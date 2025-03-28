@@ -36,3 +36,7 @@ translation_p_value_violin(k=5, b=8, num_tokens=50, filename=filename)
 
 plot_p_value_dist_translation("simmark_5_8", 50, filename) 
 plot_p_value_dist_translation("simmark_5_8", 100, filename) #these seem to be working the best
+
+plot_p_value_dist_translation("unigram", 100, filename)
+plot_p_value_dist_translation("softred", 100, filename)
+plot_p_value_dist_translation("synthid", 100, filename)

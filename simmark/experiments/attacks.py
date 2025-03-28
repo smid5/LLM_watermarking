@@ -5,6 +5,7 @@ from transformers import AutoTokenizer
 def modify_text(tokenizer, vocab_size, text, num_modify):
     ids = tokenizer.encode(text, return_tensors="pt").squeeze()
     modified_ids = []
+    torch.seed()
 
     num_modify = min(num_modify, len(ids))  
 
@@ -93,6 +94,7 @@ def translate_text(tokenizer, vocab_size, text, translate_whole = True, num_modi
     
 def delete_text(tokenizer, text, num_delete):
     ids = tokenizer.encode(text, return_tensors="pt").squeeze()
+    torch.seed()
     
     num_delete = min(num_delete, len(ids))  
     delete_indices = torch.randperm(len(ids))[:num_delete]  # Select random indices to delete
@@ -107,6 +109,7 @@ def delete_text(tokenizer, text, num_delete):
 
 def insert_text(tokenizer, vocab_size, text, num_insert):
     ids = tokenizer.encode(text, return_tensors="pt").squeeze()
+    torch.seed()
     
     for _ in range(num_insert):
         idx = torch.randint(0, len(ids) + 1, (1,))  # Choose a random position
