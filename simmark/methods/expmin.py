@@ -90,7 +90,7 @@ def expmin_detect(text, config):
         # Compute the minimum cost for each hash_idx within the window
         for hash_idx in range(config['k']):
             xi = get_xi(prior_ids, hash_idx, config['seed'], config['vocab_size'])
-            cost = -np.log(xi[ids[i].item()])  # Get the cost for the actual token id
+            cost = -np.log(np.clip(xi[ids[i].item()], 1e-10, 1))  # Get the cost for the actual token id
             min_cost = min(min_cost, cost)
 
         avg_cost += min_cost / (len(ids) - prior_tokens)
