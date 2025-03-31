@@ -59,6 +59,8 @@ def extract_watermark_config(generation_name, watermark_config):
             prior_tokens = int(generation_name.split("_")[1])
         watermark_config['prior_tokens'] = prior_tokens 
         watermark_config['k'] = k
+    elif method == "expminnohash":
+        watermark_config['n'] = 150
     elif method == "softred": 
         n_gram = 2
         if '_' in generation_name:
@@ -235,3 +237,55 @@ def test_watermark(prompts, num_tokens, llm_config, generation_name, detection_n
             f.write(str(output) + '\n')
 
     return p_values
+
+def test_distortion(prompts, num_tokens, llm_config, generation_name, seed=42, folder='data/'):
+    perplexity_list = []
+    filename = folder + f'{generation_name}_{generation_name}_.txt'
+    cached_data = read_data(filename)
+    matches = ['prompt', 'seed', 'num_tokens']
+    for prompt in prompts:
+        generated_text = ""
+        # Check if prompt and seed is already in cached data
+        try:
+            # Find all indices where the prompt matches
+            indices = [i for i, p in enumerate(cached_data['prompt']) if p == prompt]
+
+            is_match = len(indices)>0
+            # Check if any of those indices match seed and num_tokens
+            for idx in indices:
+                is_match = True
+                for match in matches:
+                    if cached_data[match][idx] != locals()[match]:
+                        is_match = False
+                if is_match:
+                    generated_text = cached_data['generated_text'][idx]
+                    perplexity_list.append(sentence_perplexity(prompt, generated_text, llm_config))
+                    break
+
+            if is_match:
+                continue  # Skip generating text if we found a cached match
+        except (KeyError, ValueError):
+            pass
+
+        generated_text = generate(prompt, num_tokens, llm_config, generation_name, seed=seed)
+        perplexity_list.append(sentence_perplexity(prompt, generated_text, llm_config))
+    
+    return perplexity_list
+        
+def sentence_perplexity(prompt, generated_text, llm_config):
+    ids = llm_config['tokenizer'].encode(generated_text, return_tensors="pt").squeeze()
+    input_ids = llm_config['tokenizer'].encode(prompt, return_tensors="pt").squeeze()
+    token_probs = []
+
+    while len(input_ids) != len(ids):
+        with torch.no_grad():
+            input_text = llm_config['tokenizer'].decode(input_ids, skip_special_tokens=True)
+            input_tensor = llm_config['tokenizer'](input_text, return_tensors="pt")["input_ids"]
+            original_logits = llm_config['model'](input_tensor).logits
+            original_probs = torch.softmax(original_logits[0,-1,:], dim=-1)
+            token_probs.append(torch.log(original_probs[ids[len(input_ids)].item()]))
+
+            input_ids = torch.cat((input_ids, ids[len(input_ids)].unsqueeze(0)))
+
+    perplexity = np.exp(-np.mean(token_probs)).item()
+    return perplexity

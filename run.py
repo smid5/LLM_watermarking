@@ -5,8 +5,9 @@ from simmark.experiments.sentence_length_vs_p_value import generate_sentence_len
 from simmark.experiments.three_attacks_simmark_vs_p_value import generate_simmark_modification_experiment
 from simmark.experiments.test_expmin_nowater import generate_simmark_vs_expmin_p_values
 from simmark.experiments.translation_p_value_dist import translation_p_value_violin, plot_p_value_dist_translation
+from simmark.experiments.robustness_vs_distortion import generate_robustness_vs_distortion
 
-filename = 'data/prompts.txt'
+filename = 'data/prompts_test.txt'
 plot_p_value_dist(k=2, b=64, num_tokens=30, filename=filename)
 plot_p_value_dist(k=4, b=64, num_tokens=30, filename=filename)
 plot_p_value_dist(k=8, b=64, num_tokens=30, filename=filename)
@@ -40,3 +41,6 @@ plot_p_value_dist_translation("simmark_5_8", 100, filename) #these seem to be wo
 plot_p_value_dist_translation("unigram", 100, filename)
 plot_p_value_dist_translation("softred", 100, filename)
 plot_p_value_dist_translation("synthid", 100, filename)
+plot_p_value_dist_translation("expminnohash", 100, filename)
+
+generate_robustness_vs_distortion(filename, 100, k=20, b=64)
