@@ -44,7 +44,7 @@ def load_llm_config(model_name):
 def extract_watermark_config(generation_name, watermark_config):
     method = generation_name.split("_")[0]
     watermark_config['method'] = method
-    k = 16
+    k = 5
     if method == "simmark":
         b = 30
         if '_' in generation_name:
@@ -54,7 +54,7 @@ def extract_watermark_config(generation_name, watermark_config):
         watermark_config['b'] = b
         watermark_config['transformer_model'] = 'all-MiniLM-L6-v2'
     elif method == "expmin":
-        prior_tokens = 10
+        prior_tokens = 3
         if '_' in generation_name:
             prior_tokens = int(generation_name.split("_")[1])
         watermark_config['prior_tokens'] = prior_tokens 
@@ -70,16 +70,15 @@ def extract_watermark_config(generation_name, watermark_config):
         depth = 30 # follow original paper
         if '_' in generation_name:
             depth = int(generation_name.split('_')[1])
-        watermark_config["prior_tokens"] = 3
+        watermark_config["prior_tokens"] = 4 # follow original paper
         watermark_config["depth"] = depth
-        watermark_config['k'] = k
     elif method == "unigram": pass
     elif method == "nomark": pass
     else:
         raise ValueError(f"Unknown generation method: {generation_name}")
     return watermark_config
 
-def generate(text_start, num_tokens, llm_config, generation_name, seed=42, temperature=1.8, top_k=50, top_p=0.9):
+def generate(text_start, num_tokens, llm_config, generation_name, seed=42, top_p=0.9):
     # Extract generation configuration
     gen_config = {
         'vocab_size': llm_config['vocab_size'],
@@ -89,7 +88,9 @@ def generate(text_start, num_tokens, llm_config, generation_name, seed=42, tempe
     }
     gen_config = extract_watermark_config(generation_name, gen_config)
     
-    input_ids = llm_config['tokenizer'].encode(text_start, padding=True, truncation=True, return_tensors="pt")
+    inputs = llm_config['tokenizer'](text_start, padding=True, truncation=True, return_tensors="pt")
+    input_ids = inputs["input_ids"]
+    attention_mask = inputs["attention_mask"]
 
     logit_processor = logit_processors[gen_config['method']](gen_config)
 
@@ -97,13 +98,12 @@ def generate(text_start, num_tokens, llm_config, generation_name, seed=42, tempe
     print('Starting generation...')
     outputs = llm_config['model'].generate(
         input_ids,
+        attention_mask=attention_mask,
         max_new_tokens=num_tokens,
-        # do_sample=True,
+        do_sample=True,
         logits_processor=LogitsProcessorList([logit_processor]),
-        pad_token_id=llm_config['tokenizer'].eos_token_id
-        # temperature=temperature,
-        # top_p=top_p,
-        # top_k=top_k
+        pad_token_id=llm_config['tokenizer'].eos_token_id,
+        top_p=top_p
     )
     print('Generation complete!')
 
@@ -238,11 +238,12 @@ def test_watermark(prompts, num_tokens, llm_config, generation_name, detection_n
 
     return p_values
 
-def test_distortion(prompts, num_tokens, llm_config, generation_name, seed=42, folder='data/'):
+def test_distortion(prompts, num_tokens, llm_config, generation_name, detection_name, seed=42, folder='data/'):
     perplexity_list = []
-    filename = folder + f'{generation_name}_{generation_name}_.txt'
+    filename = folder + f'{generation_name}_{detection_name}_.txt'
     cached_data = read_data(filename)
     matches = ['prompt', 'seed', 'num_tokens']
+    print(f"Calculating distortion for generator: {generation_name}, detector: {detection_name}")
     for prompt in prompts:
         generated_text = ""
         # Check if prompt and seed is already in cached data
@@ -268,6 +269,17 @@ def test_distortion(prompts, num_tokens, llm_config, generation_name, seed=42, f
             pass
 
         generated_text = generate(prompt, num_tokens, llm_config, generation_name, seed=seed)
+        p_value = detect(generated_text, llm_config, detection_name, seed=seed) # Calculate p_value to be stored for later use
+        # Save output to file
+        output = {
+            'prompt': prompt,
+            'generated_text': generated_text,
+            'p_value': p_value,
+            'seed' : seed,
+            'num_tokens' : num_tokens,
+        }
+        with open(filename, 'a') as f:
+            f.write(str(output) + '\n')
         perplexity_list.append(sentence_perplexity(prompt, generated_text, llm_config))
     
     return perplexity_list

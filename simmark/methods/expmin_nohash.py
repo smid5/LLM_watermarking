@@ -21,12 +21,14 @@ class ExpMinNoHashProcessor(torch.nn.Module):
 
     def forward(self, input_ids, logits):
         xi = self.xis[(self.i+self.tau)%self.n,:]
-        probs = logits[0].softmax(dim=-1)         
-        next_token = torch.argmin(-np.log(xi) / probs) 
-        
-        # Modify logits to enforce next token selection
-        logits[0, :] = -1e5
-        logits[0, next_token] = 1e5
+        batch_size = input_ids.shape[0]
+        for b in range(batch_size):
+            probs = logits[b].softmax(dim=-1)         
+            next_token = torch.argmin(-np.log(xi) / probs) 
+            
+            # Modify logits to enforce next token selection
+            logits[b, :] = -1e5
+            logits[b, next_token] = 1e5
 
         self.i += 1
         
@@ -34,23 +36,35 @@ class ExpMinNoHashProcessor(torch.nn.Module):
 
 from scipy.stats import gamma
 
-def expmin_nohash_detect(text, config):
+def expmin_nohash_detect(text, config, n_runs=100):
+    vocab_size = config['vocab_size']
     ids = config['tokenizer'].encode(text, return_tensors="pt").squeeze()
 
     n = config['n']
-    xis = get_xis(config['seed'], config['vocab_size'], n)
-    min_cost = float('inf')
+    xis = get_xis(config['seed'], vocab_size, n)
+    
+    test_result = test_statistic(ids, xis, len(ids)//2)
+    p_value = 0
+    for run in range(n_runs):
+        rng = np.random.default_rng()
+        xis = rng.random((n, vocab_size))
+        null_result = test_statistic(ids, xis, len(ids)//2)
+        # assuming lower test values indicate presence of watermark
+        p_value += (null_result <= test_result).astype(float) / n_runs
 
-    for j in range(n):
-        cost = 0
-        for i in range(len(ids)):
-            cost += -np.log(xis[(j+i)%n,ids[i].item()])
-        min_cost = min(min_cost, cost)
-
-    shape = len(ids)
-    rate = 1
-    p_value = gamma.cdf(min_cost, a=shape, scale=1/rate)
-
-    print(f"Detection cost: {min_cost}, shape: {shape}, rate: {rate}, p-value: {p_value}")
+    print(f"p-value: {p_value}")
     return p_value
 
+def test_statistic(ids, xis, k):
+    n = xis.shape[0]
+    min_cost = float('inf')
+    for i in range(len(ids)-k+1):
+        min_cost_k = float('inf')
+
+        for j in range(n):
+            cost = 0
+            for idx in range(k):
+                cost += -np.log(xis[(i+j+idx)%n,ids[idx].item()])
+            min_cost_k = min(min_cost_k, cost)
+        min_cost = min(min_cost_k, min_cost)
+    return min_cost
