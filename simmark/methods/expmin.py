@@ -30,19 +30,21 @@ class ExpMinProcessor(torch.nn.Module):
         self.k = generation_config['k']  # Now self.k exists
 
     def forward(self, input_ids, logits):
-        prior_ids = input_ids[0, -self.prior_tokens:].sum()
-        # Sample hash_idx
-        rng = np.random.default_rng()
-        hash_idx = rng.integers(self.k)
-        # hash_idx = int(hashlib.sha256(bytes(str(prior_ids), 'utf-8')).hexdigest(), 16) % self.k
-        xi = get_xi(prior_ids, hash_idx, self.seed, self.vocab_size)
-         
-        probs = logits[0].softmax(dim=-1)         
-        next_token = torch.argmin(-np.log(xi) / probs) 
-        
-        # Modify logits to enforce next token selection
-        logits[0, :] = -1e5
-        logits[0, next_token] = 1e5
+        batch_size = input_ids.shape[0]
+        for b in range(batch_size):
+            prior_ids = input_ids[b, -self.prior_tokens:].sum()
+            # Sample hash_idx
+            rng = np.random.default_rng()
+            hash_idx = rng.integers(self.k)
+            # hash_idx = int(hashlib.sha256(bytes(str(prior_ids), 'utf-8')).hexdigest(), 16) % self.k
+            xi = get_xi(prior_ids, hash_idx, self.seed, self.vocab_size)
+            
+            probs = logits[b].softmax(dim=-1)         
+            next_token = torch.argmin(-np.log(xi) / probs) 
+            
+            # Modify logits to enforce next token selection
+            logits[b, :] = -1e5
+            logits[b, next_token] = 1e5
         
         return logits  
 
@@ -83,22 +85,25 @@ def expmin_detect(text, config):
     
     avg_cost = 0
 
-    for i in range(prior_tokens, len(ids)):
-        prior_ids = ids[i-prior_tokens:i].sum() # If i < prior_tokens, this results in an out-of-bounds slice
-        min_cost = float('inf')
+    if prior_tokens < len(ids):
+        for i in range(prior_tokens, len(ids)):
+            prior_ids = ids[i-prior_tokens:i].sum() # If i < prior_tokens, this results in an out-of-bounds slice
+            min_cost = float('inf')
+            
+            # Compute the minimum cost for each hash_idx within the window
+            for hash_idx in range(config['k']):
+                xi = get_xi(prior_ids, hash_idx, config['seed'], config['vocab_size'])
+                cost = -np.log(np.clip(xi[ids[i].item()], 1e-10, 1-(1e-10)))  # Get the cost for the actual token id
+                min_cost = min(min_cost, cost)
+
+            avg_cost += min_cost / (len(ids) - prior_tokens)
+
+        shape = len(ids) - prior_tokens
+        rate = (len(ids) - prior_tokens) * config['k']
+        p_value = gamma.cdf(avg_cost, shape, scale=1/rate)
+        print(f"Detection cost: {avg_cost}, p-value: {p_value}")
+    else:
+        p_value = 0.5
         
-        # Compute the minimum cost for each hash_idx within the window
-        for hash_idx in range(config['k']):
-            xi = get_xi(prior_ids, hash_idx, config['seed'], config['vocab_size'])
-            cost = -np.log(np.clip(xi[ids[i].item()], 1e-10, 1))  # Get the cost for the actual token id
-            min_cost = min(min_cost, cost)
-
-        avg_cost += min_cost / (len(ids) - prior_tokens)
-
-    shape = len(ids) - prior_tokens
-    rate = (len(ids) - prior_tokens) * config['k']
-    p_value = gamma.cdf(avg_cost, shape, scale=1/rate)
-
-    print(f"Detection cost: {avg_cost}, p-value: {p_value}")
     return p_value
 

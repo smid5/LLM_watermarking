@@ -7,7 +7,7 @@ from sentence_transformers import SentenceTransformer
 def simhash(input_vector, hash_idx, vocab_size, seed, k, b):
     # Use seed and ell to sample b Gaussian vectors r_1, …, r_b in R^d
     rng = np.random.default_rng(hash_idx + k * seed)
-    embed_dim = input_vector.shape[0]
+    embed_dim = input_vector.shape[0] #384
     random_vectors = rng.standard_normal((b, embed_dim))
 
     # Apply SimHash to input_vector
@@ -38,27 +38,29 @@ class SimMarkProcessor(torch.nn.Module):
         self.tokenizer = generation_config['tokenizer']
 
     def forward(self, input_ids, logits):
-        # Step 1: Embed context using encoder into vector v in R^d
-        with torch.no_grad():  
-            input_text = self.tokenizer.decode(input_ids[0])
+        batch_size = input_ids.shape[0]
+        for b in range(batch_size):
+            # Step 1: Embed context using encoder into vector v in R^d
+            with torch.no_grad():  
+                input_text = self.tokenizer.decode(input_ids[b])
 
-        input_vector = self.transformer_model.encode(input_text)
+            input_vector = self.transformer_model.encode(input_text)
 
-        # Change: Use sentence embedding vector on all prior tokens (not just self.prior_tokens of them)
-        # Link in slack for the sentence embedding library
+            # Change: Use sentence embedding vector on all prior tokens (not just self.prior_tokens of them)
+            # Link in slack for the sentence embedding library
 
-        # Sample hash_idx
-        rng = np.random.default_rng()
-        hash_idx = rng.integers(self.k)
-        # Compute xi using input_vector, hash_idx, and seed
-        xi = simhash(input_vector, hash_idx, self.vocab_size, self.seed, self.k, self.b)
- 
-        probs = logits[0].softmax(dim=-1)         
-        next_token = torch.argmin(-np.log(xi) / probs) 
-        
-        # Modify logits to enforce next token selection
-        logits[0, :] = -1e5
-        logits[0, next_token] = 1e5
+            # Sample hash_idx
+            rng = np.random.default_rng()
+            hash_idx = rng.integers(self.k)
+            # Compute xi using input_vector, hash_idx, and seed
+            xi = simhash(input_vector, hash_idx, self.vocab_size, self.seed, self.k, self.b)
+    
+            probs = logits[b].softmax(dim=-1)         
+            next_token = torch.argmin(-np.log(xi) / probs) 
+            
+            # Modify logits to enforce next token selection
+            logits[b, :] = -1e5
+            logits[b, next_token] = 1e5
         
         return logits  
 

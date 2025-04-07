@@ -9,7 +9,10 @@ def generate_green(vocab_size, seed, input_ids):
 
 # A function that adjusts the logits so that tokens in the green list have a higher value compared to tokens in the red
 # Used within GreenPreferenceProcessor
-def adjust_logits(logits, green_list, bias_factor = 2):
+def adjust_logits(logits, vocab_size, seed, input_ids, bias_factor = 2):
+    green_list = np.zeros((len(input_ids), vocab_size))
+    for i in range(len(input_ids)):
+        green_list[i,:] = generate_green(vocab_size, seed, input_ids[i,:])
     return logits + bias_factor * torch.tensor(green_list)
 
 # A Logits Processor that adjusts the logits so tokens in the green list are favored
@@ -23,9 +26,9 @@ class SoftRedProcessor(torch.nn.Module):
     def forward(self, input_ids, scores):
         # print(f"ids of generation: {input_ids[0]}")
 
-        green = generate_green(self.vocab_size, self.seed, input_ids[0, -(self.n_gram_size - 1):])
+        updated_logits = adjust_logits(scores, self.vocab_size, self.seed, input_ids[:, -(self.n_gram_size - 1):])
   
-        return adjust_logits(scores, green)
+        return updated_logits
 
 # Detects whether text was likely generated using red/green list technique
 

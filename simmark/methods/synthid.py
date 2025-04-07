@@ -18,15 +18,17 @@ def get_gvalues(prior_ids, seed, vocab_size, depth):
     g_tensor = torch.from_numpy(g_values) 
     return g_tensor
 
-def update_scores(logits, g_values, selfdepth):
-    depth, _ = g_values.shape
+def update_scores(logits, prior_ids, seed, vocab_size, depth):
+    batch_size = prior_ids.shape[0]
+    g_values = torch.zeros(batch_size, depth, vocab_size)
+    for b in range(batch_size):
+        g_values[b,:,:] = get_gvalues(prior_ids[b], seed, vocab_size, depth)
 
-    assert depth == selfdepth
-    probs = logits.softmax(dim=0)
+    probs = logits.softmax(dim=-1)
 
     for i in range(depth):
-        g_values_at_depth = g_values[i,:]
-        g_mass_at_depth = (g_values_at_depth * probs).sum(axis=0, keepdims=True)
+        g_values_at_depth = g_values[:,i,:]
+        g_mass_at_depth = (g_values_at_depth * probs).sum(dim=-1, keepdims=True)
         probs = probs * (1 + g_values_at_depth - g_mass_at_depth)
 
     log_probs = torch.log(probs)
@@ -48,12 +50,11 @@ class SynthIDProcessor(torch.nn.Module):
         self.depth = generation_config['depth']
 
     def forward(self, input_ids, logits):
-        prior_ids = input_ids[0, -self.prior_tokens:].sum()
+        prior_ids = input_ids[:, -self.prior_tokens:].sum(dim=-1)
         # Sample hash_idx
         # hash_idx = np.random.randint(0, self.k)
-        g_values = get_gvalues(prior_ids, self.seed, self.vocab_size, self.depth)
          
-        probs = update_scores(logits[0], g_values, self.depth)
+        probs = update_scores(logits, prior_ids, self.seed, self.vocab_size, self.depth)
         
         return probs 
 
