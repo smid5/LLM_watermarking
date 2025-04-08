@@ -42,14 +42,20 @@ def plot_robustness_vs_distortion(robustness, distortion, filename, k, b, num_to
 
     # Scatter plot with correct labeling
     for i, key in enumerate(methods):
+        xs = robustness_values[i]
+        ys = distortion_values[i]
+
+        # Plot line connecting the points
+        plt.plot(xs, ys, color=colors[i % len(colors)], linewidth=1)
+
         for j, detection in enumerate(detections):
-            plt.scatter(robustness_values[i][j], distortion_values[i], 
+            plt.scatter(xs[j], ys[j], 
                         color=colors[i % len(colors)], marker=markers[j])
         technique_handles.append(plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=colors[i % len(colors)], markersize=8, label=key))
 
     # Labels and legends
-    plt.xlabel('Robustness (average p-value on translated text)')
-    plt.ylabel('Distortion (perplexity)')
+    plt.xlabel('Robustness (median p-value)')
+    plt.ylabel('Distortion (median perplexity)')
     plt.title(f'Robustness vs. Distortion for k={k}, b={b}, n={num_tokens}')
     
     # Two separate legends
@@ -74,9 +80,11 @@ def generate_robustness_vs_distortion(filename, num_tokens, k=5, b=8):
     detection_methods = [f"simmark_{k}_{b}", "unigram", "softred", "expmin", "synthid", "expminnohash", f"simmark_{k}_{b}"]
 
     for generation_method, detection_method in zip(generation_methods, detection_methods):
-        robustness[generation_method] = [np.mean(test_watermark(prompts, num_tokens, llm_config, generation_method, detection_method)),
-                                         np.mean(test_watermark(prompts, num_tokens, llm_config, generation_method, detection_method, "translate")),
-                                         np.mean(test_watermark(prompts, num_tokens, llm_config, "nomark", detection_method))]
-        distortion[generation_method] = np.mean(test_distortion(prompts, num_tokens, llm_config, generation_method, detection_method))
+        robustness[generation_method] = [np.median(test_watermark(prompts, num_tokens, llm_config, generation_method, detection_method)),
+                                         np.median(test_watermark(prompts, num_tokens, llm_config, generation_method, detection_method, "translate")),
+                                         np.median(test_watermark(prompts, num_tokens, llm_config, "nomark", detection_method))]
+        distortion[generation_method] = [np.median(test_distortion(prompts, num_tokens, llm_config, generation_method, detection_method)),
+                                         np.median(test_distortion(prompts, num_tokens, llm_config, generation_method, detection_method, "translate")),
+                                         np.median(test_distortion(prompts, num_tokens, llm_config, "nomark", detection_method))]
 
     plot_robustness_vs_distortion(robustness, distortion, f"Figures/robustness_distortion_k{k}_b{b}_{num_tokens}.pdf", k, b, num_tokens)

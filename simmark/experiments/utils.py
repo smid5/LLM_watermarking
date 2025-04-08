@@ -238,12 +238,12 @@ def test_watermark(prompts, num_tokens, llm_config, generation_name, detection_n
 
     return p_values
 
-def test_distortion(prompts, num_tokens, llm_config, generation_name, detection_name, seed=42, folder='data/'):
+def test_distortion(prompts, num_tokens, llm_config, generation_name, detection_name, attack_name="", seed=42, folder='data/'):
     perplexity_list = []
-    filename = folder + f'{generation_name}_{detection_name}_.txt'
+    filename = folder + f'{generation_name}_{detection_name}_{attack_name}.txt'
     cached_data = read_data(filename)
     matches = ['prompt', 'seed', 'num_tokens']
-    print(f"Calculating distortion for generator: {generation_name}, detector: {detection_name}")
+    print(f"Calculating distortion for generator: {generation_name}, detector: {detection_name}, attack: {attack_name if attack_name else "None"}")
     for prompt in prompts:
         generated_text = ""
         # Check if prompt and seed is already in cached data
@@ -269,6 +269,9 @@ def test_distortion(prompts, num_tokens, llm_config, generation_name, detection_
             pass
 
         generated_text = generate(prompt, num_tokens, llm_config, generation_name, seed=seed)
+        if attack_name != "":
+            attack_method = extract_attack(llm_config, attack_name)
+            generated_text = attack_method(generated_text)
         p_value = detect(generated_text, llm_config, detection_name, seed=seed) # Calculate p_value to be stored for later use
         # Save output to file
         output = {
