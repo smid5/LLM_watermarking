@@ -1,6 +1,11 @@
 import torch
 from transformers import MarianMTModel, MarianTokenizer
 from transformers import AutoTokenizer
+
+from sentence_transformers import SentenceTransformer, util
+import Levenshtein
+
+distortion_model = SentenceTransformer('all-MiniLM-L6-v2')
     
 def modify_text(tokenizer, vocab_size, text, num_modify):
     ids = tokenizer.encode(text, return_tensors="pt").squeeze()
@@ -21,6 +26,12 @@ def modify_text(tokenizer, vocab_size, text, num_modify):
     text = tokenizer.decode(ids, skip_special_tokens=True)
 
     return text
+
+def measure_distortion(original, modified):
+    emb = distortion_model.encode([original, modified], convert_to_tensor=True)
+    cosine_sim = util.pytorch_cos_sim(emb[0], emb[1]).item()
+    edit_ratio = Levenshtein.distance(original, modified) / max(len(original), len(modified), 1)
+    return round(cosine_sim, 4), round(edit_ratio, 4)
 
 def translate_text(tokenizer, vocab_size, text, translate_whole = True, num_modify = None, language = "french"):
     """
@@ -54,6 +65,8 @@ def translate_text(tokenizer, vocab_size, text, translate_whole = True, num_modi
         roundtrip_token = ne_en_model.generate(**tokens)
         roundtrip_text = ne_en_tokenizer.decode(roundtrip_token[0], skip_special_tokens=True)
 
+        cos_sim, edit_ratio = measure_distortion(text, roundtrip_text)
+        print(f"[TranslateText] Semantic similarity: {cos_sim}, Edit ratio: {edit_ratio}")
         return roundtrip_text
 
     else: #word-by-word translation
