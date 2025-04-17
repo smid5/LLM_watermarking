@@ -67,7 +67,7 @@ def translate_text(tokenizer, vocab_size, text, translate_whole = True, num_modi
         roundtrip_text = ne_en_tokenizer.decode(roundtrip_token[0], skip_special_tokens=True)
 
         cos_sim, edit_ratio = measure_distortion(text, roundtrip_text)
-        log_path = "original_vs_translated.txt"
+        log_path = "logs/original_vs_translated.txt"
         os.makedirs("logs", exist_ok=True)
         with open(log_path, "a", encoding="utf-8") as f:
             f.write("[TranslateText]\n")
