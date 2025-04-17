@@ -1,6 +1,7 @@
 import torch
 from transformers import MarianMTModel, MarianTokenizer
 from transformers import AutoTokenizer
+import os
 
 from sentence_transformers import SentenceTransformer, util
 import Levenshtein
@@ -66,7 +67,14 @@ def translate_text(tokenizer, vocab_size, text, translate_whole = True, num_modi
         roundtrip_text = ne_en_tokenizer.decode(roundtrip_token[0], skip_special_tokens=True)
 
         cos_sim, edit_ratio = measure_distortion(text, roundtrip_text)
-        print(f"[TranslateText] Semantic similarity: {cos_sim}, Edit ratio: {edit_ratio}")
+        log_path = "original_vs_translated.txt"
+        os.makedirs("logs", exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write("[TranslateText]\n")
+            f.write(f"Original:   {text.strip()}\n")
+            f.write(f"Translated: {roundtrip_text.strip()}\n")
+            f.write(f"Semantic similarity: {cos_sim}, Edit ratio: {edit_ratio}\n")
+            f.write("=" * 60 + "\n\n")
         return roundtrip_text
 
     else: #word-by-word translation
