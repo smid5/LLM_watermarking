@@ -8,9 +8,7 @@ from simmark.experiments.translation_p_value_dist import translation_p_value_vio
 from simmark.experiments.robustness_vs_distortion import generate_robustness_vs_distortion
 
 filename = 'data/prompts.txt'
-plot_p_value_dist(k=2, b=64, num_tokens=30, filename=filename)
-plot_p_value_dist(k=4, b=64, num_tokens=30, filename=filename)
-plot_p_value_dist(k=8, b=64, num_tokens=30, filename=filename)
+plot_p_value_dist(k=4, b=10, num_tokens=30, filename=filename)
 
 # Define the range of k and b values
 k_values = [5, 10, 15, 20]
@@ -18,8 +16,8 @@ b_values = [8, 16, 32, 64]
 num_tokens = 100
 generate_p_value_heatmaps(k_values, b_values, num_tokens, filename=filename)
 
-k = 5
-b = 16
+k = 4
+b = 10
 num_modifications = 10
 generate_p_value_modification_experiment(filename, k=k, b=b, num_modifications=num_modifications, num_tokens=num_tokens)
 
@@ -32,13 +30,14 @@ generate_sentence_length_p_values(filename, k=k, b=b, num_modifications=num_modi
 
 generate_simmark_vs_expmin_p_values(filename, k=k, b=b, length_variations=length_variations)
 
-translation_p_value_violin(k=5, b=8, num_tokens=50, filename=filename)
+translation_p_value_violin(k=k, b=b, num_tokens=100, filename=filename)
 
-plot_p_value_dist_translation("simmark_5_8", 50, filename) 
-plot_p_value_dist_translation("simmark_5_8", 100, filename) #these seem to be working the best
+plot_p_value_dist_translation(f"simmark_{k}_{b}", 100, filename) #this seems to be working the best
+plot_p_value_dist_translation("expmin", 100, filename)
+plot_p_value_dist_translation("expminnohash", 100, filename)
+plot_p_value_dist_translation("softred", 100, filename)
+plot_p_value_dist_translation("unigram", 100, filename)
+plot_p_value_dist_translation("synthid", 100, filename)
 
-generate_robustness_vs_distortion(filename, 100, k=5, b=8)
-generate_robustness_vs_distortion(filename, 100, k=5, b=2)
-generate_robustness_vs_distortion(filename, 100, k=5, b=3)
-generate_robustness_vs_distortion(filename, 100, k=5, b=4)
-generate_robustness_vs_distortion(filename, 100, k=5, b=5)
+generate_robustness_vs_distortion(filename, 100, k=k, b=b)
+generate_robustness_vs_distortion(filename, 100, k=k, b=b, attack_name="translate")

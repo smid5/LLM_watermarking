@@ -12,8 +12,8 @@ def translation_p_value_violin(k, b, num_tokens, filename):
 
     prompts = load_prompts(filename=filename)
 
-    p_values = {"SimMark": {}, "SoftRedList": {}, "Unigram": {}, "ExpMin": {}, "SynthID": {}}
-    gen_methods = [f"simmark_{k}_{b}", "softred", "unigram", "expmin", "synthid"]
+    p_values = {"SimMark": {}, "SoftRedList": {}, "Unigram": {}, "ExpMin": {}, "HashlessExpMin": {}, "SynthID": {}}
+    gen_methods = [f"simmark_{k}_{b}", "softred", "unigram", "expmin", "expminnohash", "synthid"]
 
     for method, gen_method in zip(list(p_values.keys()), gen_methods):
         # Generate without watermark, no attack, and detection
@@ -58,6 +58,7 @@ def translation_p_value_violin(k, b, num_tokens, filename):
 
     plt.xticks(rotation=20, ha="right", fontsize=12)
     plt.yscale("log")  # Log scale for p-values
+    plt.ylim(1e-20, 1)
     plt.ylabel("p-value (log scale)")
     plt.xlabel("Watermarking Technique")
     plt.title(rf"Distribution of p-values for $k={k}$, $b={b}$, $n={num_tokens}$")

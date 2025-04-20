@@ -100,12 +100,15 @@ def generate(text_start, num_tokens, llm_config, generation_name, seed=42, top_p
         input_ids,
         attention_mask=attention_mask,
         max_new_tokens=num_tokens,
-        do_sample=True,
+        do_sample=False,
         logits_processor=LogitsProcessorList([logit_processor]),
-        pad_token_id=llm_config['tokenizer'].eos_token_id,
-        top_p=top_p
+        pad_token_id=llm_config['tokenizer'].eos_token_id
     )
     print('Generation complete!')
+    # score = outputs.scores[0][0] # first generated token
+    # print((score == float('-inf')).sum())   # how many -inf values?
+    # print(score.shape)                      # shape of the tensor
+    # print([value.item() for value in score if value != float('-inf')])
 
     return llm_config['tokenizer'].decode(outputs[0], skip_special_tokens=True)
 
@@ -297,8 +300,13 @@ def sentence_perplexity(prompt, generated_text, llm_config):
             input_text = llm_config['tokenizer'].decode(input_ids, skip_special_tokens=True)
             input_tensor = llm_config['tokenizer'](input_text, return_tensors="pt")["input_ids"]
             original_logits = llm_config['model'](input_tensor).logits
+            # if input_text == "Once upon a":
+            #     print(f"The first ten indices of logits for prompt \"{input_text}\": {original_logits[0,-1,:10]}")
             original_probs = torch.softmax(original_logits[0,-1,:], dim=-1)
             token_probs.append(torch.log(original_probs[ids[len(input_ids)].item()]))
+            # print(torch.topk(original_probs, k=10))
+            # print(f"len(input_ids) = {len(input_ids)}")
+            # print(original_probs[ids[len(input_ids)].item()])
 
             input_ids = torch.cat((input_ids, ids[len(input_ids)].unsqueeze(0)))
 

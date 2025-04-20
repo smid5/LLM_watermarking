@@ -8,8 +8,32 @@ def generate_green(vocab_size, seed):
 
 # A function that adjusts the logits so that tokens in the green list have a higher value compared to tokens in the red
 # Used within GreenPreferenceProcessor
-def adjust_logits(logits, green_list, bias_factor = 2):
-    return logits + bias_factor * green_list
+def select_next_token(logits, green_list, bias_factor = 2):
+    logits = logits + bias_factor * green_list
+    probs = logits.softmax(dim=-1)
+    next_token = top_p_sampling(probs, 0.9)
+    return next_token
+
+def top_p_sampling(probs, top_p=0.9):
+    sorted_probs, sorted_indices = torch.sort(probs, descending=True)
+
+    # Compute cumulative probabilities
+    cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+
+    # Mask out tokens where cumulative probability exceeds top_p
+    cutoff_index = torch.searchsorted(cumulative_probs, top_p, right=False).item()
+
+    # Set the logits of the tokens beyond top_p to zero
+    sorted_probs[cutoff_index+1:] = 0.0
+    sorted_probs = sorted_probs / sorted_probs.sum()
+    sorted_probs = torch.where(
+        torch.isfinite(sorted_probs), sorted_probs, torch.tensor(0.0)
+    )
+    # Sample from the filtered distribution
+    next_token = torch.multinomial(sorted_probs, 1)
+
+    # Map back to original indices
+    return sorted_indices[next_token].item()
 
 # A Logits Processor that adjusts the logits so tokens in the green list are favored
 class UnigramProcessor(torch.nn.Module):
@@ -18,7 +42,12 @@ class UnigramProcessor(torch.nn.Module):
         # Generate binary green vector
         self.green = generate_green(generation_config['vocab_size'], generation_config['seed'])
     def forward(self, input_ids, scores):
-        return adjust_logits(scores, self.green)
+        batch_size = input_ids.shape[0]
+        for b in range(batch_size):
+            next_token = select_next_token(scores[b], self.green)
+            scores[b,:] = 1e-5
+            scores[b,next_token] = 1e5
+        return scores
 
 # Detects whether text was likely generated using red/green list technique
 

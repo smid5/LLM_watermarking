@@ -13,7 +13,7 @@ logit_processors = {
     "softred": SoftRedProcessor,
     "simmark": SimMarkProcessor,
     "synthid": SynthIDProcessor,
-    "nomark": NoMarkProcessor,
+    "nomark": NoMarkProcessor
 }
 
 detection_methods = {

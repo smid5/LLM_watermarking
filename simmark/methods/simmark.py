@@ -24,6 +24,24 @@ def simhash(input_vector, hash_idx, vocab_size, seed, k, b):
 
     return xi
 
+def top_p_sampling(probs, xi, top_p=0.9):
+    sorted_probs, sorted_indices = torch.sort(probs, descending=True)
+
+    # Compute cumulative probabilities
+    cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+
+    # Mask out tokens where cumulative probability exceeds top_p
+    cutoff_index = torch.searchsorted(cumulative_probs, top_p, right=False).item()
+
+    # Create new probs and xi
+    top_p_sorted_indices = sorted_indices[:cutoff_index+1]
+    top_p_probs = probs[top_p_sorted_indices]
+    top_p_xi = xi[top_p_sorted_indices.numpy()]
+
+    next_token = torch.argmin(-np.log(top_p_xi) / top_p_probs)
+
+    # Map back to original indices
+    return sorted_indices[next_token].item()
 
 class SimMarkProcessor(torch.nn.Module):
     def __init__(self, generation_config):
@@ -43,11 +61,12 @@ class SimMarkProcessor(torch.nn.Module):
             # Step 1: Embed context using encoder into vector v in R^d
             with torch.no_grad():  
                 input_text = self.tokenizer.decode(input_ids[b])
-
+            # if input_text == "</s>Once upon a":
+            #     print(f"The first ten indices of logits for prompt \"{input_text}\": {logits[b,:10]}")
             input_vector = self.transformer_model.encode(input_text)
 
             # Change: Use sentence embedding vector on all prior tokens (not just self.prior_tokens of them)
-            # Link in slack for the sentence embedding library
+            # Link in slack for the sentence embedding slibrary
 
             # Sample hash_idx
             rng = np.random.default_rng()
@@ -56,7 +75,9 @@ class SimMarkProcessor(torch.nn.Module):
             xi = simhash(input_vector, hash_idx, self.vocab_size, self.seed, self.k, self.b)
     
             probs = logits[b].softmax(dim=-1)         
-            next_token = torch.argmin(-np.log(xi) / probs) 
+            next_token = top_p_sampling(probs, xi, 0.9)
+            # next_word = self.tokenizer.decode(next_token)
+            # print(next_word)
             
             # Modify logits to enforce next token selection
             logits[b, :] = -1e5

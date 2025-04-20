@@ -10,10 +10,35 @@ def generate_green(vocab_size, seed, input_ids):
 # A function that adjusts the logits so that tokens in the green list have a higher value compared to tokens in the red
 # Used within GreenPreferenceProcessor
 def adjust_logits(logits, vocab_size, seed, input_ids, bias_factor = 2):
-    green_list = np.zeros((len(input_ids), vocab_size))
     for i in range(len(input_ids)):
-        green_list[i,:] = generate_green(vocab_size, seed, input_ids[i,:])
-    return logits + bias_factor * torch.tensor(green_list)
+        green_list = generate_green(vocab_size, seed, input_ids[i,:])
+        logits[i] = logits[i] + bias_factor * torch.tensor(green_list)
+        probs = logits[i].softmax(dim=-1)
+        next_token = top_p_sampling(probs, 0.9)
+        logits[i,:] = 1e-5
+        logits[i,next_token] = 1e5
+    return logits
+
+def top_p_sampling(probs, top_p=0.9):
+    sorted_probs, sorted_indices = torch.sort(probs, descending=True)
+
+    # Compute cumulative probabilities
+    cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+
+    # Mask out tokens where cumulative probability exceeds top_p
+    cutoff_index = torch.searchsorted(cumulative_probs, top_p, right=False).item()
+
+    # Set the logits of the tokens beyond top_p to zero
+    sorted_probs[cutoff_index+1:] = 0.0
+    sorted_probs = sorted_probs / sorted_probs.sum()
+    sorted_probs = torch.where(
+        torch.isfinite(sorted_probs), sorted_probs, torch.tensor(0.0)
+    )
+    # Sample from the filtered distribution
+    next_token = torch.multinomial(sorted_probs, 1)
+
+    # Map back to original indices
+    return sorted_indices[next_token].item()
 
 # A Logits Processor that adjusts the logits so tokens in the green list are favored
 class SoftRedProcessor(torch.nn.Module):
