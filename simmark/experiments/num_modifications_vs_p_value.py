@@ -37,6 +37,7 @@ def generate_p_value_modification_experiment(filename, k=2, b=64, num_modificati
         "Unigram": np.zeros(num_modifications),
         "SoftRedList": np.zeros(num_modifications),
         "ExpMin": np.zeros(num_modifications),
+        "ExpMinNoHash": np.zeros(num_modifications),
         "SynthID": np.zeros(num_modifications)
     }
 
@@ -56,7 +57,11 @@ def generate_p_value_modification_experiment(filename, k=2, b=64, num_modificati
         ))
 
         p_values["ExpMin"][i] = np.mean(test_watermark(
-            prompts, num_tokens, llm_config, "expmin_3", "expmin_3", f"modify_{i}"
+            prompts, num_tokens, llm_config, "expmin", "expmin", f"modify_{i}"
+        ))
+
+        p_values["ExpMinNoHash"][i] = np.mean(test_watermark(
+            prompts, num_tokens, llm_config, "expminnohash", "expminnohash", f"modify_{i}"
         ))
 
         p_values["SynthID"][i] = np.mean(test_watermark(

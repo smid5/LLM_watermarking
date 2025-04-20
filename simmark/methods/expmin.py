@@ -3,12 +3,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import hashlib
 
-# def get_xi(prior_ids, hash_idx, seed, vocab_size):
-#     xi_seed = int(hashlib.sha256(hash_idx + bytes(seed) + bytes(prior_ids)).hexdigest(), 16)
-#     np.random.seed(xi_seed)
-#     xi = np.random.rand(vocab_size)
-#     return xi
-
 def get_xi(prior_ids, hash_idx, seed, vocab_size):
     xi_seed = int(hashlib.sha256(
         bytes(str(hash_idx), 'utf-8') + 
@@ -20,6 +14,24 @@ def get_xi(prior_ids, hash_idx, seed, vocab_size):
     xi = rng.random(vocab_size)
     return xi
 
+def top_p_sampling(probs, xi, top_p=0.9):
+    sorted_probs, sorted_indices = torch.sort(probs, descending=True)
+
+    # Compute cumulative probabilities
+    cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+
+    # Mask out tokens where cumulative probability exceeds top_p
+    cutoff_index = torch.searchsorted(cumulative_probs, top_p, right=False).item()
+
+    # Create new probs and xi
+    top_p_sorted_indices = sorted_indices[:cutoff_index+1]
+    top_p_probs = probs[top_p_sorted_indices]
+    top_p_xi = xi[top_p_sorted_indices.numpy()]
+
+    next_token = torch.argmin(-np.log(top_p_xi) / top_p_probs)
+
+    # Map back to original indices
+    return sorted_indices[next_token].item()
 
 class ExpMinProcessor(torch.nn.Module):
     def __init__(self, generation_config):
@@ -36,43 +48,16 @@ class ExpMinProcessor(torch.nn.Module):
             # Sample hash_idx
             rng = np.random.default_rng()
             hash_idx = rng.integers(self.k)
-            # hash_idx = int(hashlib.sha256(bytes(str(prior_ids), 'utf-8')).hexdigest(), 16) % self.k
             xi = get_xi(prior_ids, hash_idx, self.seed, self.vocab_size)
             
             probs = logits[b].softmax(dim=-1)         
-            next_token = torch.argmin(-np.log(xi) / probs) 
+            next_token = top_p_sampling(probs, xi, 0.9)
             
             # Modify logits to enforce next token selection
             logits[b, :] = -1e5
             logits[b, next_token] = 1e5
         
         return logits  
-
-# from scipy.stats import gamma
-
-# def expmin_detect(text, config):
-#     ids = config['tokenizer'].encode(text, return_tensors="pt").squeeze()
-#     prior_tokens = config['prior_tokens']
-#     with torch.no_grad():
-#         embeddings = config['model'].model.decoder.embed_tokens(ids)
-    
-#     avg_cost = 0
-
-#     for i in range(len(ids)):
-#         prior_ids = ids[i-prior_tokens:i]
-#         min_cost = float('inf')
-#         for hash_idx in range(config['k']):            
-#             xi = get_xi(prior_ids, hash_idx, config['seed'], config['vocab_size'])
-#             cost = -np.log(xi[ids[i]])
-#             min_cost = min(min_cost, cost)
-
-#         avg_cost += min_cost / len(ids)
-
-#     shape = len(ids) 
-#     scale = len(ids) * config['k']
-#     p_value = gamma.cdf(avg_cost, shape, scale=scale)
-
-#     return p_value
 
 from scipy.stats import gamma
 
@@ -106,4 +91,3 @@ def expmin_detect(text, config):
         p_value = 0.5
         
     return p_value
-

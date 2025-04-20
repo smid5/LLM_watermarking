@@ -8,6 +8,25 @@ def get_xis(seed, vocab_size, n):
     xis = rng.random((n, vocab_size))
     return xis
 
+def top_p_sampling(probs, xi, top_p=0.9):
+    sorted_probs, sorted_indices = torch.sort(probs, descending=True)
+
+    # Compute cumulative probabilities
+    cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+
+    # Mask out tokens where cumulative probability exceeds top_p
+    cutoff_index = torch.searchsorted(cumulative_probs, top_p, right=False).item()
+
+    # Create new probs and xi
+    top_p_sorted_indices = sorted_indices[:cutoff_index+1]
+    top_p_probs = probs[top_p_sorted_indices]
+    top_p_xi = xi[top_p_sorted_indices.numpy()]
+
+    next_token = torch.argmin(-np.log(top_p_xi) / top_p_probs)
+
+    # Map back to original indices
+    return sorted_indices[next_token].item()
+
 class ExpMinNoHashProcessor(torch.nn.Module):
     def __init__(self, generation_config):
         super().__init__()
@@ -24,7 +43,7 @@ class ExpMinNoHashProcessor(torch.nn.Module):
         batch_size = input_ids.shape[0]
         for b in range(batch_size):
             probs = logits[b].softmax(dim=-1)         
-            next_token = torch.argmin(-np.log(xi) / probs) 
+            next_token = top_p_sampling(probs, xi, 0.9)
             
             # Modify logits to enforce next token selection
             logits[b, :] = -1e5
@@ -43,12 +62,12 @@ def expmin_nohash_detect(text, config, n_runs=100):
     n = config['n']
     xis = get_xis(config['seed'], vocab_size, n)
     
-    test_result = test_statistic(ids, xis, len(ids)//2)
+    test_result = test_statistic(ids, xis, len(ids))
     p_value = 0
     for run in range(n_runs):
         rng = np.random.default_rng()
         xis = rng.random((n, vocab_size))
-        null_result = test_statistic(ids, xis, len(ids)//2)
+        null_result = test_statistic(ids, xis, len(ids))
         # assuming lower test values indicate presence of watermark
         p_value += (null_result <= test_result).astype(float) / n_runs
 

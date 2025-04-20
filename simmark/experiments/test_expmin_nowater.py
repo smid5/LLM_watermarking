@@ -47,7 +47,7 @@ def generate_simmark_vs_expmin_p_values(filename, k=2, b=64, length_variations=l
         
         # ExpMin Detection on Non-Watermarked Text
         p_values["ExpMin on No Watermark"][length] = np.mean(
-            [test_watermark([p], num_tokens, llm_config, "nomark", "expmin_3")[0] 
+            [test_watermark([p], num_tokens, llm_config, "nomark", "expmin")[0] 
              for p, num_tokens in zip(applicable_prompts, num_tokens_list)]
         )
     

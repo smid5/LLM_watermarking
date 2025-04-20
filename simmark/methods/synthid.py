@@ -31,14 +31,33 @@ def update_scores(logits, prior_ids, seed, vocab_size, depth):
         g_mass_at_depth = (g_values_at_depth * probs).sum(dim=-1, keepdims=True)
         probs = probs * (1 + g_values_at_depth - g_mass_at_depth)
 
-    log_probs = torch.log(probs)
-    log_probs = torch.where(
-        torch.isfinite(log_probs), log_probs, torch.tensor(-1e12)
+    for b in range(batch_size):
+        next_token = top_p_sampling(probs[b], 0.9)
+        logits[b,:] = 1e-5
+        logits[b,next_token] = 1e5
+
+    return logits
+
+def top_p_sampling(probs, top_p=0.9):
+    sorted_probs, sorted_indices = torch.sort(probs, descending=True)
+
+    # Compute cumulative probabilities
+    cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+
+    # Mask out tokens where cumulative probability exceeds top_p
+    cutoff_index = torch.searchsorted(cumulative_probs, top_p, right=False).item()
+
+    # Set the logits of the tokens beyond top_p to zero
+    sorted_probs[cutoff_index+1:] = 0.0
+    sorted_probs = sorted_probs / sorted_probs.sum()
+    sorted_probs = torch.where(
+        torch.isfinite(sorted_probs), sorted_probs, torch.tensor(0.0)
     )
+    # Sample from the filtered distribution
+    next_token = torch.multinomial(sorted_probs, 1)
 
-    return log_probs
-
-
+    # Map back to original indices
+    return sorted_indices[next_token].item()
 
 class SynthIDProcessor(torch.nn.Module):
     def __init__(self, generation_config):
@@ -54,9 +73,9 @@ class SynthIDProcessor(torch.nn.Module):
         # Sample hash_idx
         # hash_idx = np.random.randint(0, self.k)
          
-        probs = update_scores(logits, prior_ids, self.seed, self.vocab_size, self.depth)
+        scores = update_scores(logits, prior_ids, self.seed, self.vocab_size, self.depth)
         
-        return probs 
+        return scores
 
 from scipy.stats import binom
 

@@ -30,7 +30,7 @@ def generate_sentence_length_p_values(filename, k=2, b=64, num_modifications=1, 
     llm_config = load_llm_config('facebook/opt-125m')
     prompts = load_prompts(filename=filename)
     
-    p_values = {"No Watermark": {}, "SimMark": {}, "SimMark + Attack": {}, "SoftRedList": {}, "Unigram": {}, "ExpMin": {}, "SynthID": {}}
+    p_values = {"No Watermark": {}, "SimMark": {}, "SimMark + Attack": {}, "SoftRedList": {}, "Unigram": {}, "ExpMin": {}, "ExpMinNoHash": {}, "SynthID": {}}
     
     for length in length_variations:
         applicable_prompts = [p for p in prompts if len(p.split()) < length]
@@ -65,7 +65,12 @@ def generate_sentence_length_p_values(filename, k=2, b=64, num_modifications=1, 
         )
         
         p_values["ExpMin"][length] = np.mean(
-            [test_watermark([p], num_tokens, llm_config, "expmin_3", "expmin_3")[0] 
+            [test_watermark([p], num_tokens, llm_config, "expmin", "expmin")[0] 
+             for p, num_tokens in zip(applicable_prompts, num_tokens_list)]
+        )
+
+        p_values["ExpMinNoHash"][length] = np.mean(
+            [test_watermark([p], num_tokens, llm_config, "expminnohash", "expminnohash")[0] 
              for p, num_tokens in zip(applicable_prompts, num_tokens_list)]
         )
 
