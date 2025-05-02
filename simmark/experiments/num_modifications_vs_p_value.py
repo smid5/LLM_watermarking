@@ -71,5 +71,95 @@ def generate_p_value_modification_experiment(filename, k=2, b=64, num_modificati
     # Generate plot
     plot_p_value_modifications(modifications, p_values, f"figures/p_value_vs_modifications_k{k}_b{b}.pdf")
 
+def generate_p_value_translation_experiment(filename, k=2, b=64, num_modifications=21, num_tokens=100):
+    llm_config = load_llm_config('facebook/opt-125m')
+    prompts = load_prompts(filename=filename)
+    modifications = np.arange(num_modifications)
+
+    # Dictionary to store p-values for each method
+    p_values = {
+        "SimMark": np.zeros(num_modifications),
+        "Unigram": np.zeros(num_modifications),
+        "SoftRedList": np.zeros(num_modifications),
+        "ExpMin": np.zeros(num_modifications),
+        "ExpMinNoHash": np.zeros(num_modifications),
+        "SynthID": np.zeros(num_modifications)
+    }
+
+    for i in range(num_modifications):
+
+        # Compute p-values for each method
+        p_values["SimMark"][i] = np.median(test_watermark(
+            prompts, num_tokens, llm_config, f"simmark_{k}_{b}", f"simmark_{k}_{b}", f"translate_{i}"
+        ))
+
+        p_values["Unigram"][i] = np.median(test_watermark(
+            prompts, num_tokens, llm_config, "unigram", "unigram", f"translate_{i}"
+        ))
+
+        p_values["SoftRedList"][i] = np.median(test_watermark(
+            prompts, num_tokens, llm_config, "softred", "softred", f"translate_{i}"
+        ))
+
+        p_values["ExpMin"][i] = np.median(test_watermark(
+            prompts, num_tokens, llm_config, "expmin", "expmin", f"translate_{i}"
+        ))
+
+        p_values["ExpMinNoHash"][i] = np.median(test_watermark(
+            prompts, num_tokens, llm_config, "expminnohash", "expminnohash", f"translate_{i}"
+        ))
+
+        p_values["SynthID"][i] = np.median(test_watermark(
+            prompts, num_tokens, llm_config, "synthid", "synthid", f"translate_{i}"
+        ))
+
+    # Generate plot
+    plot_p_value_modifications(modifications, p_values, f"figures/p_value_vs_translations_k{k}_b{b}.pdf")
+
+def generate_p_value_mask_modification_experiment(filename, k=2, b=64, num_modifications=21, num_tokens=100):
+    llm_config = load_llm_config('facebook/opt-125m')
+    prompts = load_prompts(filename=filename)
+    modifications = np.arange(num_modifications)
+
+    # Dictionary to store p-values for each method
+    p_values = {
+        "SimMark": np.zeros(num_modifications),
+        "Unigram": np.zeros(num_modifications),
+        "SoftRedList": np.zeros(num_modifications),
+        "ExpMin": np.zeros(num_modifications),
+        "ExpMinNoHash": np.zeros(num_modifications),
+        "SynthID": np.zeros(num_modifications)
+    }
+
+    for i in range(num_modifications):
+
+        # Compute p-values for each method
+        p_values["SimMark"][i] = np.median(test_watermark(
+            prompts, num_tokens, llm_config, f"simmark_{k}_{b}", f"simmark_{k}_{b}", f"mask_{i}"
+        ))
+
+        p_values["Unigram"][i] = np.median(test_watermark(
+            prompts, num_tokens, llm_config, "unigram", "unigram", f"mask_{i}"
+        ))
+
+        p_values["SoftRedList"][i] = np.median(test_watermark(
+            prompts, num_tokens, llm_config, "softred", "softred", f"mask_{i}"
+        ))
+
+        p_values["ExpMin"][i] = np.median(test_watermark(
+            prompts, num_tokens, llm_config, "expmin", "expmin", f"mask_{i}"
+        ))
+
+        p_values["ExpMinNoHash"][i] = np.median(test_watermark(
+            prompts, num_tokens, llm_config, "expminnohash", "expminnohash", f"mask_{i}"
+        ))
+
+        p_values["SynthID"][i] = np.median(test_watermark(
+            prompts, num_tokens, llm_config, "synthid", "synthid", f"mask_{i}"
+        ))
+
+    # Generate plot
+    plot_p_value_modifications(modifications, p_values, f"figures/p_value_vs_mask_modifications_k{k}_b{b}.pdf")
+
 # if __name__ == '__main__':
 #     generate_p_value_modification_experiment("sentence_starters.txt")

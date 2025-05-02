@@ -1,6 +1,6 @@
 
 from ..methods import logit_processors, detection_methods
-from simmark.experiments.attacks import modify_text, delete_text, insert_text, translate_text
+from simmark.experiments.attacks import modify_text, delete_text, insert_text, translate_text, mask_modify_text
 from transformers import LogitsProcessorList, TemperatureLogitsWarper, TopKLogitsWarper, TopPLogitsWarper
 import torch
 import numpy as np
@@ -185,10 +185,13 @@ def extract_attack(llm_config, attack_name):
         )
     elif attack_type == "translate": # Translation attack
         return lambda text: translate_text(
-            llm_config['tokenizer'],
-            llm_config['vocab_size'],
             text, 
             translate_whole=translate_whole,
+            num_modify=num_changes
+        )
+    elif attack_type == "mask": # Mask modify attack
+        return lambda text: mask_modify_text(
+            text,
             num_modify=num_changes
         )
     else:

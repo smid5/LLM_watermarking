@@ -13,6 +13,8 @@ def plot_robustness_vs_distortion(robustness, distortion, filename, k, b, num_to
     # Scatter plot with correct labeling
     for i, key in enumerate(methods):
         xs = robustness_values[i]
+        if xs == 0:
+            xs = 1e-20
         ys = distortion_values[i]
 
         plt.scatter(xs, ys, label=key)
