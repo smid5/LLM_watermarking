@@ -14,7 +14,7 @@ def simhash(input_vector, hash_idx, vocab_size, seed, k, b):
     projections = random_vectors @ input_vector
     binary = (projections > 0).astype(int)
     simhash_seed = int(
-        hashlib.sha256(bytes(seed) + bytes(binary))
+        hashlib.sha256(bytes(hash_idx + k*seed) + bytes(binary))
         .hexdigest(),
     16)
 

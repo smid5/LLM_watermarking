@@ -1,10 +1,19 @@
 import torch
-from transformers import MarianMTModel, MarianTokenizer
+from transformers import MarianMTModel, MarianTokenizer, BertTokenizer, BertForMaskedLM
 from transformers import AutoTokenizer
 import os
 
 from sentence_transformers import SentenceTransformer, util
 import Levenshtein
+import nltk
+from nltk.tokenize.treebank import TreebankWordDetokenizer
+import random
+
+nltk.download('punkt')
+from nltk.tokenize import word_tokenize
+
+from transformers import logging
+logging.set_verbosity_error()
 
 distortion_model = SentenceTransformer('all-MiniLM-L6-v2')
     
@@ -34,7 +43,7 @@ def measure_distortion(original, modified):
     edit_ratio = Levenshtein.distance(original, modified) / max(len(original), len(modified), 1)
     return round(cosine_sim, 4), round(edit_ratio, 4)
 
-def translate_text(tokenizer, vocab_size, text, translate_whole = True, num_modify = None, language = "french"):
+def translate_text(text, translate_whole = True, num_modify = None, language = "french"):
     """
     translate_whole=True is preferred
     """
@@ -78,40 +87,71 @@ def translate_text(tokenizer, vocab_size, text, translate_whole = True, num_modi
         return roundtrip_text
 
     else: #word-by-word translation
-        ids = tokenizer.encode(text, return_tensors="pt").squeeze()
-        modified_ids = []
-
+        words = word_tokenize(text)
         if num_modify == None:
-            num_modify = len(ids)
-        num_modify = min(num_modify, len(ids))  
+            num_modify = len(words)
+        num_modify = min(num_modify, len(words))  
+        indices = list(range(len(words)))
 
-        for _ in range(num_modify):
-            idx = torch.randint(0, len(ids), (1,)).item()
-            while idx in modified_ids:
-                idx = torch.randint(0, len(ids), (1,)).item()  # Keep searching for a new index
+        random.shuffle(indices)
+        selected_indices = indices[:num_modify]
 
-            original_word = tokenizer.decode([ids[idx]], skip_special_tokens=True)
+        for idx in selected_indices:
+            original_word = words[idx]
+
+            # Skip punctuation or short tokens
+            if not original_word.isalpha():
+                continue
+            
             # Translate from English → Target Language
             token = en_ne_tokenizer(original_word, return_tensors="pt", padding=True)
             translated_token = en_ne_model.generate(**token, max_new_tokens=5)
-            translated_text = en_ne_tokenizer.decode(translated_token[0], skip_special_tokens=False)
+            translated_text = en_ne_tokenizer.decode(translated_token[0], skip_special_tokens=True)
 
             # Translate back from Target Language → English
             token = ne_en_tokenizer(translated_text, return_tensors="pt", padding=True)
             roundtrip_token = ne_en_model.generate(**token, max_new_tokens=5)
-            roundtrip_text = ne_en_tokenizer.decode(roundtrip_token[0], skip_special_tokens=False)
+            roundtrip_text = ne_en_tokenizer.decode(roundtrip_token[0], skip_special_tokens=True)
 
-            # Replace token with round-trip tokenized version
-            new_token_id = tokenizer.encode(roundtrip_text, return_tensors="pt").squeeze()
-            #ids[idx] = new_token_id[-1]  # Ensure it's still a token ID tensor
-            ids = torch.cat((ids[:idx],new_token_id, ids[idx+1:]))
+            words[idx] = roundtrip_text
 
-            for i in range(len(new_token_id)):
-                modified_ids.append(idx+i) 
+        detokenizer = TreebankWordDetokenizer()
+        sentence = detokenizer.detokenize(words)   
 
-        ids = ids
-        text = tokenizer.decode(ids, skip_special_tokens=True)
-        return text
+        return sentence
+    
+def mask_modify_text(text, num_modify):
+    # print(text)
+    tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
+    model = BertForMaskedLM.from_pretrained('bert-base-cased')
+    model.eval()
+
+    tokens = tokenizer.tokenize(text)
+    maskable_indices = [i for i, t in enumerate(tokens) if t not in tokenizer.all_special_tokens and t.isalpha()]
+    num_modify = min(num_modify, len(maskable_indices))
+    modified_indices = random.sample(maskable_indices, num_modify)
+
+    for idx in modified_indices:
+        original_token = tokens[idx]
+        # print(tokenizer.decode(tokenizer.convert_tokens_to_ids(original_token)))
+        tokens[idx] = '[MASK]'
+
+        # Encode masked tokens
+        input_ids = tokenizer.encode(tokens, return_tensors='pt')
+        mask_idx = (input_ids == tokenizer.mask_token_id).nonzero(as_tuple=True)[1].item()
+
+        with torch.no_grad():
+            outputs = model(input_ids)
+            predictions = outputs.logits
+
+        predicted_token_id = predictions[0, mask_idx].argmax().item()
+        predicted_token = tokenizer.convert_ids_to_tokens([predicted_token_id])[0]
+
+        tokens[idx] = predicted_token
+
+    modified_text = tokenizer.convert_tokens_to_string(tokens)
+    # print(modified_text)
+    return modified_text
     
 def delete_text(tokenizer, text, num_delete):
     ids = tokenizer.encode(text, return_tensors="pt").squeeze()

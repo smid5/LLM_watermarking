@@ -36,21 +36,21 @@ def generate_p_value_heatmaps(k_values, b_values, num_tokens, filename):
             detection_name = f"simmark_{k}_{b}"
             
             # print("watermark")
-            p_values_watermark[i, j] = np.mean(test_watermark(
+            p_values_watermark[i, j] = np.median(test_watermark(
                 prompts, num_tokens, llm_config, f"simmark_{k}_{b}", detection_name
             ))
             
             # print("nomark")
-            p_values_unrelated[i, j] = np.mean(test_watermark(
+            p_values_unrelated[i, j] = np.median(test_watermark(
                 prompts, num_tokens, llm_config, "nomark", detection_name
             ))
             
             # print("modify")
-            p_values_modified[i, j] = np.mean(test_watermark(
+            p_values_modified[i, j] = np.median(test_watermark(
                 prompts, num_tokens, llm_config, f"simmark_{k}_{b}", detection_name, "modify_1"
             ))
 
-            p_values_translated[i, j] = np.mean(test_watermark(
+            p_values_translated[i, j] = np.median(test_watermark(
                 prompts, num_tokens, llm_config, f"simmark_{k}_{b}", detection_name, "translate"
             ))
     

@@ -7,3 +7,4 @@ scienceplots
 sentence-transformers
 sentencepiece
 python-Levenshtein
+nltk
