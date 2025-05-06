@@ -44,27 +44,27 @@ def generate_p_value_modification_experiment(filename, k=2, b=64, num_modificati
     for i in range(num_modifications):
 
         # Compute p-values for each method
-        p_values["SimMark"][i] = np.mean(test_watermark(
+        p_values["SimMark"][i] = np.median(test_watermark(
             prompts, num_tokens, llm_config, f"simmark_{k}_{b}", f"simmark_{k}_{b}", f"modify_{i}"
         ))
 
-        p_values["Unigram"][i] = np.mean(test_watermark(
+        p_values["Unigram"][i] = np.median(test_watermark(
             prompts, num_tokens, llm_config, "unigram", "unigram", f"modify_{i}"
         ))
 
-        p_values["SoftRedList"][i] = np.mean(test_watermark(
+        p_values["SoftRedList"][i] = np.median(test_watermark(
             prompts, num_tokens, llm_config, "softred", "softred", f"modify_{i}"
         ))
 
-        p_values["ExpMin"][i] = np.mean(test_watermark(
+        p_values["ExpMin"][i] = np.median(test_watermark(
             prompts, num_tokens, llm_config, "expmin", "expmin", f"modify_{i}"
         ))
 
-        p_values["ExpMinNoHash"][i] = np.mean(test_watermark(
+        p_values["ExpMinNoHash"][i] = np.median(test_watermark(
             prompts, num_tokens, llm_config, "expminnohash", "expminnohash", f"modify_{i}"
         ))
 
-        p_values["SynthID"][i] = np.mean(test_watermark(
+        p_values["SynthID"][i] = np.median(test_watermark(
             prompts, num_tokens, llm_config, "synthid", "synthid", f"modify_{i}"
         ))
 

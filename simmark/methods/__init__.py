@@ -5,6 +5,7 @@ from .simmark import SimMarkProcessor, simmark_detect
 from .synthid import SynthIDProcessor, synthid_detect
 from .expmin_nohash import ExpMinNoHashProcessor, expmin_nohash_detect
 from .nomark import NoMarkProcessor
+from .simmark_empirical import simmark_empirical_detect
 
 logit_processors = {
     "expmin": ExpMinProcessor,
@@ -13,7 +14,8 @@ logit_processors = {
     "softred": SoftRedProcessor,
     "simmark": SimMarkProcessor,
     "synthid": SynthIDProcessor,
-    "nomark": NoMarkProcessor
+    "nomark": NoMarkProcessor,
+    "simmarkemp": SimMarkProcessor
 }
 
 detection_methods = {
@@ -22,5 +24,6 @@ detection_methods = {
     "unigram": unigram_detect,
     "softred": softred_detect,
     "simmark": simmark_detect,
-    "synthid": synthid_detect
+    "synthid": synthid_detect,
+    "simmarkemp": simmark_empirical_detect
 }

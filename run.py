@@ -11,10 +11,10 @@ from simmark.experiments.radar_plot import generate_radar_plot, generate_radar_c
 filename = 'data/prompts.txt'
 
 # Define the range of k and b values
-k_values = [5, 10, 15, 20]
-b_values = [8, 16, 32, 64]
-num_tokens = 100
-generate_p_value_heatmaps(k_values, b_values, num_tokens, filename=filename)
+# k_values = [5, 10, 15, 20]
+# b_values = [8, 16, 32, 64]
+# num_tokens = 100
+# generate_p_value_heatmaps(k_values, b_values, num_tokens, filename=filename)
 
 k_values = [3, 4, 5, 8, 12]
 b_values = [4, 6, 8, 10, 12]
@@ -25,8 +25,8 @@ k = 4
 b = 4
 num_modifications = 10
 generate_p_value_modification_experiment(filename, k=k, b=b, num_modifications=num_modifications, num_tokens=num_tokens)
-generate_p_value_mask_modification_experiment(filename, k=k, b=b, num_modifications=num_modifications, num_tokens=100)
-generate_p_value_translation_experiment(filename, k=k, b=b, num_modifications=num_modifications, num_tokens=100)
+generate_p_value_mask_modification_experiment(filename, k=k, b=b, num_modifications=num_modifications, num_tokens=num_tokens)
+generate_p_value_translation_experiment(filename, k=k, b=b, num_modifications=num_modifications, num_tokens=num_tokens)
 
 generate_simmark_modification_experiment(filename, k=k, b=b, num_modifications=num_modifications, num_tokens=num_tokens)
 
@@ -38,7 +38,7 @@ generate_sentence_length_p_values(filename, k=k, b=b, num_modifications=num_modi
 generate_simmark_vs_expmin_p_values(filename, k=k, b=b, length_variations=length_variations)
 
 translation_p_value_violin(k=k, b=b, num_tokens=100, filename=filename)
-
+plot_p_value_dist_translation(f"simmarkemp_{k}_{b}", 100, filename)
 plot_p_value_dist_translation(f"simmark_{k}_{b}", 100, filename) #this seems to be working the best
 plot_p_value_dist_translation("expmin", 100, filename)
 plot_p_value_dist_translation("expminnohash", 100, filename)

@@ -19,7 +19,7 @@ def plot_sentence_length_p_values(sentence_lengths, p_values, filename):
     plt.yscale("log")  # Set y-axis to log scale for better visualization
     plt.xscale("log")
     plt.xlabel("Sentence Length")
-    plt.ylabel("Mean p-Value")
+    plt.ylabel("Median p-Value")
     plt.title("SimMark vs ExpMin (Non-Watermarked) Sentence Length vs. Mean p-Value")
     plt.legend()
     plt.grid()
@@ -40,13 +40,13 @@ def generate_simmark_vs_expmin_p_values(filename, k=2, b=64, length_variations=l
         num_tokens_list = [length - len(p.split()) for p in applicable_prompts]
         
         # SimMark Detection on SimMark-Generated Text
-        p_values["SimMark"][length] = np.mean(
+        p_values["SimMark"][length] = np.median(
             [test_watermark([p], num_tokens, llm_config, f"simmark_{k}_{b}", f"simmark_{k}_{b}")[0] 
              for p, num_tokens in zip(applicable_prompts, num_tokens_list)]
         )
         
         # ExpMin Detection on Non-Watermarked Text
-        p_values["ExpMin on No Watermark"][length] = np.mean(
+        p_values["ExpMin on No Watermark"][length] = np.median(
             [test_watermark([p], num_tokens, llm_config, "nomark", "expmin")[0] 
              for p, num_tokens in zip(applicable_prompts, num_tokens_list)]
         )

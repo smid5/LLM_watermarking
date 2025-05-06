@@ -45,7 +45,7 @@ def extract_watermark_config(generation_name, watermark_config):
     method = generation_name.split("_")[0]
     watermark_config['method'] = method
     k = 5
-    if method == "simmark":
+    if method == "simmark" or method == "simmarkemp":
         b = 30
         if '_' in generation_name:
             k = int(generation_name.split("_")[1])
