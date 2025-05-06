@@ -94,7 +94,7 @@ def plot_p_value_dist_translation(method, num_tokens, filename):
     plt.figure(figsize=(4, 3))
 
     # Labels and legend
-    plt.xscale("linear")
+    plt.xscale("log")
 
     threshold = 1e-40  # Exclude values below this
     for idx, key in enumerate(p_values):
