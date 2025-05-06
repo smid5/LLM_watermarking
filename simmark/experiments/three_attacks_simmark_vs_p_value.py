@@ -18,7 +18,7 @@ def plot_p_value_modifications(modifications, p_values_dict, filename):
 
     plt.yscale("log")  # Set y-axis to log scale for better visualization
     plt.xlabel("Number of Modifications")
-    plt.ylabel("Average p-Value")
+    plt.ylabel("Median p-Value")
     plt.title("Effect of Different Modification Types on SimMark p-Values")
     plt.legend()
     plt.grid()
@@ -42,19 +42,19 @@ def generate_simmark_modification_experiment(filename, k=2, b=64, num_modificati
     for i in range(num_modifications):
 
         # Compute p-values for each modification type
-        p_values["SimMark - Substitution"][i] += np.mean(test_watermark(
+        p_values["SimMark - Substitution"][i] += np.median(test_watermark(
             prompts, num_tokens, llm_config, f"simmark_{k}_{b}", f"simmark_{k}_{b}", f"modify_{i}"
         ))
 
-        p_values["SimMark - Insertion"][i] += np.mean(test_watermark(
+        p_values["SimMark - Insertion"][i] += np.median(test_watermark(
             prompts, num_tokens, llm_config, f"simmark_{k}_{b}", f"simmark_{k}_{b}", f"insert_{i}"
         ))
 
-        p_values["SimMark - Deletion"][i] += np.mean(test_watermark(
+        p_values["SimMark - Deletion"][i] += np.median(test_watermark(
             prompts, num_tokens, llm_config, f"simmark_{k}_{b}", f"simmark_{k}_{b}", f"delete_{i}"
         ))
 
-        p_values["SimMark - Translation"][i] += np.mean(test_watermark(
+        p_values["SimMark - Translation"][i] += np.median(test_watermark(
             prompts, num_tokens, llm_config, f"simmark_{k}_{b}", f"simmark_{k}_{b}", f"translate_{i}"
         ))
 

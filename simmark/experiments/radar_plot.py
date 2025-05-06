@@ -47,7 +47,92 @@ def get_distortion_freeness(method, num_tokens, filename):
 
     return distortion_freeness
 
-def get_unforgeability(method, num_tokens, filename, folder="data/", seed=42):
+def get_unforgeability(method, num_tokens, filename, num_inject=6, num_unwatermarked=6, folder="data/", seed=42):
+    llm_config = load_llm_config('facebook/opt-125m')
+    prompts = load_prompts(filename=filename)
+
+    output_file = folder + f"{method}_forgeability.txt"
+    detected_p_values = []
+
+    p_values_watermarked = test_watermark(
+        prompts, num_tokens, llm_config, generation_name=method, detection_name=method
+    )
+    # median_i = argmedian(p_values_watermarked)
+    cache_file_watermarked = folder + f"{method}_{method}_.txt"
+    cached_data_watermarked = read_data(cache_file_watermarked)
+
+    p_values_unwatermarked = test_watermark(
+    prompts, num_tokens, llm_config, generation_name="nomark", detection_name=method
+    )
+    cache_file_unwatermarked = folder + f"nomark_{method}_.txt"
+    cached_data_unwatermarked = read_data(cache_file_unwatermarked)
+
+    # median_text = extract_generated_text(prompts[median_i], cached_data_watermarked, num_tokens, seed)
+    # median_text_list = median_text.split()
+    # median_text_length = len(median_text_list)
+    watermarked_text_lists = []
+    for prompt in prompts:
+        watermarked_text = extract_generated_text(prompt, cached_data_watermarked, num_tokens, seed)
+        watermarked_text_list = watermarked_text.split()
+        watermarked_text_lists.append(watermarked_text_list)
+
+    for prompt in prompts:
+        generated_text = extract_generated_text(prompt, cached_data_unwatermarked, num_tokens, seed)
+        generated_text_list = generated_text.split()
+        num_words = len(generated_text_list)
+        
+        for watermarked_text_list in watermarked_text_lists:
+            watermarked_text_length = len(watermarked_text_list)
+            w_idx = 0
+            spoofed = generated_text_list[:num_unwatermarked]
+            i = num_unwatermarked
+
+            while i < num_words:
+                if w_idx < watermarked_text_length:
+                    spoofed.extend(watermarked_text_list[w_idx:w_idx+num_inject])
+                    w_idx += num_inject
+                
+                spoofed.extend(generated_text_list[i:i+num_unwatermarked])
+                i += num_unwatermarked
+
+            spoofed_text = ' '.join(spoofed)
+            detected_p_value = detect(spoofed_text, llm_config, method)
+            detected_p_values.append(detected_p_value)
+            output = {
+                'prompt': prompt,
+                'generated_text': spoofed_text,
+                'p_value': detected_p_value,
+                'seed' : seed,
+                'num_tokens' : num_tokens,
+            }
+            with open(output_file, 'a') as f:
+                f.write(str(output) + '\n')
+
+    detected_p_values = np.array(detected_p_values)
+    threshold = 1e-2
+    true_negative_rate = np.mean(detected_p_values > threshold)
+
+    print(f"Unforgeability for {method}: true_negative_rate={true_negative_rate}")
+    log_file = "logs/unforgeability.txt"
+    log_output = f"Unforgeability for {method}, {num_inject}, {num_unwatermarked}: true_negative_rate={true_negative_rate}"
+    with open(log_file, 'a') as log_f:
+        log_f.write(log_output + '\n')
+
+    return true_negative_rate
+
+def argmedian(arr):
+    arr = np.array(arr)
+
+    sorted_indices = np.argsort(arr)
+    median_sorted_idx = len(arr) // 2
+    median_index = sorted_indices[median_sorted_idx]
+
+    print("Median index:", median_index)
+    print("Median value:", arr[median_index])
+
+    return median_index
+
+def get_unforgeability_sadasivan(method, num_tokens, filename, folder="data/", seed=42):
     llm_config = load_llm_config('facebook/opt-125m')
     tokenizer = llm_config['tokenizer']
     prompts = load_prompts(filename=filename)
