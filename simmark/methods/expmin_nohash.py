@@ -55,12 +55,13 @@ class ExpMinNoHashProcessor(torch.nn.Module):
 
 from scipy.stats import gamma
 
-def expmin_nohash_detect(text, config, n_runs=100):
+def expmin_nohash_detect(text, config):
     vocab_size = config['vocab_size']
     ids = config['tokenizer'].encode(text, return_tensors="pt").squeeze()
 
     n = config['n']
     xis = get_xis(config['seed'], vocab_size, n)
+    n_runs = config['n_runs']
     
     test_result = test_statistic(ids, xis, len(ids))
     p_value = 0
