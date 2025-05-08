@@ -52,7 +52,7 @@ class SimMarkProcessor(torch.nn.Module):
         self.k = generation_config['k']
         self.b = generation_config['b']
         self.seed = generation_config['seed']
-        self.transformer_model = SentenceTransformer(generation_config['transformer_model'])
+        self.transformer_model = generation_config['transformer_model']
         self.tokenizer = generation_config['tokenizer']
 
     def forward(self, input_ids, logits):
@@ -89,7 +89,7 @@ from scipy.stats import gamma
 
 def simmark_detect(text, config):
     ids = config['tokenizer'].encode(text, return_tensors="pt").squeeze()
-    transformer_model = SentenceTransformer(config['transformer_model'])
+    transformer_model = config['transformer_model']
 
     avg_cost = 0
 

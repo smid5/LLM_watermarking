@@ -11,10 +11,10 @@ from simmark.experiments.radar_plot import generate_radar_plot, generate_radar_c
 filename = 'data/prompts.txt'
 
 # Define the range of k and b values
-# k_values = [5, 10, 15, 20]
-# b_values = [8, 16, 32, 64]
-# num_tokens = 100
-# generate_p_value_heatmaps(k_values, b_values, num_tokens, filename=filename)
+k_values = [5, 10, 15, 20]
+b_values = [8, 16, 32, 64]
+num_tokens = 100
+generate_p_value_heatmaps(k_values, b_values, num_tokens, filename=filename)
 
 k_values = [3, 4, 5, 8, 12]
 b_values = [4, 6, 8, 10, 12]

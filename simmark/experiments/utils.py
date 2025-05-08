@@ -4,6 +4,7 @@ from simmark.experiments.attacks import modify_text, delete_text, insert_text, t
 from transformers import LogitsProcessorList, TemperatureLogitsWarper, TopKLogitsWarper, TopPLogitsWarper
 import torch
 import numpy as np
+from sentence_transformers import SentenceTransformer
 
 linestyles = ['dotted', 'solid', 'dashed', 'dashdot', (5,(10,3)), (0,(1,1)), (0,(5,10)),(0,(5,1)), (0,(3,10,1,10)), (0,(3,5,1,5)), (0,(3,1,1,1)), (0,(3,5,1,5,1,5)), (0,(3,10,1,10,1,10)), (0,(3,1,1,1,1,1))]
 
@@ -52,7 +53,7 @@ def extract_watermark_config(generation_name, watermark_config):
             b = int(generation_name.split("_")[2])
         watermark_config['k'] = k
         watermark_config['b'] = b
-        watermark_config['transformer_model'] = 'all-MiniLM-L6-v2'
+        watermark_config['transformer_model'] = SentenceTransformer('all-MiniLM-L6-v2')
     elif method == "expmin":
         prior_tokens = 3
         if '_' in generation_name:
@@ -61,6 +62,7 @@ def extract_watermark_config(generation_name, watermark_config):
         watermark_config['k'] = k
     elif method == "expminnohash":
         watermark_config['n'] = 150
+        watermark_config['n_runs'] = 1000
     elif method == "softred": 
         n_gram = 2
         if '_' in generation_name:

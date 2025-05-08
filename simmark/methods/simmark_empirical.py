@@ -27,7 +27,7 @@ def simhash(input_vector, hash_idx, vocab_size, seed, k, b):
 
 def simmark_detection_cost(text, config):
     ids = config['tokenizer'].encode(text, return_tensors="pt").squeeze()
-    transformer_model = SentenceTransformer(config['transformer_model'])
+    transformer_model = config['transformer_model']
 
     avg_cost = 0
 

@@ -8,6 +8,7 @@ import Levenshtein
 import nltk
 from nltk.tokenize.treebank import TreebankWordDetokenizer
 import random
+import re
 
 try:
     nltk.data.find('tokenizers/punkt')
@@ -119,7 +120,8 @@ def translate_text(text, translate_whole = True, num_modify = None, language = "
             words[idx] = roundtrip_text
 
         detokenizer = TreebankWordDetokenizer()
-        sentence = detokenizer.detokenize(words)   
+        sentence = detokenizer.detokenize(words) 
+        sentence = re.sub(r'\s+([.,!?;:])', r'\1', sentence)  
 
         return sentence
     
@@ -153,6 +155,10 @@ def mask_modify_text(text, num_modify):
         tokens[idx] = predicted_token
 
     modified_text = tokenizer.convert_tokens_to_string(tokens)
+
+    modified_text = re.sub(r'\s+([.,!?;:])', r'\1', modified_text)
+    # Fix spacing around apostrophes (e.g., it ' s → it's)
+    modified_text = re.sub(r"\s*'\s*", "'", modified_text)
     # print(modified_text)
     return modified_text
     
