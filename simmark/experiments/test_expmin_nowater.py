@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import scienceplots
 import numpy as np
 
-from .utils import load_llm_config, test_watermark, load_prompts, cbcolors, linestyles
+from .utils import load_llm_config, test_watermark, load_prompts, cbcolors
 
 # Suppress tokenizer parallelism warning
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -26,7 +26,7 @@ def plot_sentence_length_p_values(sentence_lengths, p_values, filename):
     plt.savefig(filename)
     plt.close()
 
-def generate_simmark_vs_expmin_p_values(filename, k=2, b=64, length_variations=list(range(25, 105, 5))):
+def generate_simmark_vs_expmin_p_values(filename, k=4, b=4, length_variations=list(range(25, 105, 5))):
     llm_config = load_llm_config('facebook/opt-125m')
     prompts = load_prompts(filename=filename)
     

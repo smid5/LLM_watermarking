@@ -3,14 +3,14 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import scienceplots
 
-from .utils import load_llm_config, test_watermark, load_prompts, cbcolors, linestyles
+from .utils import load_llm_config, test_watermark, load_prompts, cbcolors, linestyles, METHODS
 
-def plot_p_value_dist(k, b, num_tokens, filename):
+def plot_p_value_dist(method_name, num_tokens, filename, k=4, b=4):
     llm_config = load_llm_config('facebook/opt-125m')
-
     prompts = load_prompts(filename=filename)
 
-    detection_name = f"simmark_{k}_{b}"
+    method = f"simmark_{k}_{b}" if method_name == "SimMark" else METHODS[method_name]
+    detection_name = method
 
     p_values = {}
 
@@ -20,13 +20,13 @@ def plot_p_value_dist(k, b, num_tokens, filename):
     )
 
     # Generate with simhash watermark, no attack, and detection
-    p_values['SimMark'] = test_watermark(
-        prompts, num_tokens, llm_config, f"simmark_{k}_{b}", detection_name
+    p_values[method_name] = test_watermark(
+        prompts, num_tokens, llm_config, method, detection_name
     )
 
     # Generate with simhash watermark, with attack, and detection
-    p_values['SimMark + Attack 1'] = test_watermark(
-        prompts, num_tokens, llm_config, f"simmark_{k}_{b}", detection_name, "modify_1"
+    p_values[f'{method_name} + Attack 1'] = test_watermark(
+        prompts, num_tokens, llm_config, method, detection_name, "modify_1"
     )
 
     plt.style.use(['science'])
@@ -39,9 +39,9 @@ def plot_p_value_dist(k, b, num_tokens, filename):
     
     plt.xlabel(r"$p$-value")
     plt.ylabel("Frequency")
-    plt.title(rf"SimMark $p$-values for $k={k}$, $b={b}$, $n={num_tokens}$")
+    plt.title(rf"{method_name} $p$-values for $n={num_tokens}$")
     plt.legend()
 
-    plt.savefig(f"figures/p_val_dist_simmark_{k}_{b}_{num_tokens}.pdf")
+    plt.savefig(f"figures/p_val_dist_{method}_{num_tokens}.pdf")
 
     # Show the plot

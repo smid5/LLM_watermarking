@@ -61,8 +61,6 @@ class SimMarkProcessor(torch.nn.Module):
             # Step 1: Embed context using encoder into vector v in R^d
             with torch.no_grad():  
                 input_text = self.tokenizer.decode(input_ids[b])
-            # if input_text == "</s>Once upon a":
-            #     print(f"The first ten indices of logits for prompt \"{input_text}\": {logits[b,:10]}")
             input_vector = self.transformer_model.encode(input_text)
 
             # Change: Use sentence embedding vector on all prior tokens (not just self.prior_tokens of them)
@@ -76,8 +74,6 @@ class SimMarkProcessor(torch.nn.Module):
     
             probs = logits[b].softmax(dim=-1)         
             next_token = top_p_sampling(probs, xi, 0.9)
-            # next_word = self.tokenizer.decode(next_token)
-            # print(next_word)
             
             # Modify logits to enforce next token selection
             logits[b, :] = -1e5
