@@ -91,17 +91,30 @@ def translate_text(text, translate_whole = True, num_modify = None, language = "
         return roundtrip_text
 
     else: #word-by-word translation
-        words = word_tokenize(text)
-        if num_modify == None:
-            num_modify = len(words)
-        num_modify = min(num_modify, len(words))  
-        indices = list(range(len(words)))
+        # ids = tokenizer.encode(text, return_tensors="pt").squeeze()
+        # word_list = [tokenizer.decode(id) for id in ids]
+        # print(f"original: {word_list}")
 
-        random.shuffle(indices)
-        selected_indices = indices[:num_modify]
+        lines = text.splitlines(keepends=True)
+        tokenized_lines = [word_tokenize(line) for line in lines]
+        # Flatten tokens and keep index mapping
+        flat_tokens = []
+        position_map = []  # Stores (line_idx, token_idx) to reconstruct later
+        for line_idx, line_tokens in enumerate(tokenized_lines):
+            for token_idx, token in enumerate(line_tokens):
+                flat_tokens.append(token)
+                position_map.append((line_idx, token_idx))
+
+        words_only_indices = [i for i, token in enumerate(flat_tokens) if token.isalpha()]
+        if num_modify == None:
+            num_modify = len(words_only_indices)
+        num_modify = min(num_modify, len(words_only_indices))  
+
+        random.shuffle(words_only_indices)
+        selected_indices = words_only_indices[:num_modify]
 
         for idx in selected_indices:
-            original_word = words[idx]
+            original_word = flat_tokens[idx]
 
             # Skip punctuation or short tokens
             if not original_word.isalpha():
@@ -117,32 +130,64 @@ def translate_text(text, translate_whole = True, num_modify = None, language = "
             roundtrip_token = ne_en_model.generate(**token, max_new_tokens=5)
             roundtrip_text = ne_en_tokenizer.decode(roundtrip_token[0], skip_special_tokens=True)
 
-            words[idx] = roundtrip_text
+            flat_tokens[idx] = roundtrip_text
+
+        # Reconstruct tokenized_lines from modified flat_tokens
+        for i, token in enumerate(flat_tokens):
+            line_idx, token_idx = position_map[i]
+            tokenized_lines[line_idx][token_idx] = token
 
         detokenizer = TreebankWordDetokenizer()
-        sentence = detokenizer.detokenize(words) 
-        sentence = re.sub(r'\s+([.,!?;:])', r'\1', sentence)  
+        detokenized_lines = []
+        for line_tokens, original_line in zip(tokenized_lines, lines):
+            detok = detokenizer.detokenize(line_tokens)
+            if original_line.endswith('\n'):
+                detok += '\n'
+            detokenized_lines.append(detok)
+
+        # Reconstruct final sentence
+        sentence = ''.join(detokenized_lines)
+        # ids = tokenizer.encode(sentence, return_tensors="pt").squeeze()
+        # word_list = [tokenizer.decode(id) for id in ids]
+        # print(f"detokenized: {word_list}")
+        # sentence = re.sub(r'\s+([.,!?;:])', r'\1', sentence)  
+        # ids = tokenizer.encode(sentence, return_tensors="pt").squeeze()
+        # word_list = [tokenizer.decode(id) for id in ids]
+        # print(f"final: {word_list}")
 
         return sentence
     
-def mask_modify_text(text, num_modify):
+def mask_modify_text(og_tokenizer, text, num_modify):
     # print(text)
+    # ids = og_tokenizer.encode(text, return_tensors="pt").squeeze()
+    # word_list = [og_tokenizer.decode(id) for id in ids]
+    # print(f"start: {word_list}")
     tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
     model = BertForMaskedLM.from_pretrained('bert-base-cased')
     model.eval()
 
-    tokens = tokenizer.tokenize(text)
-    maskable_indices = [i for i, t in enumerate(tokens) if t not in tokenizer.all_special_tokens and t.isalpha()]
-    num_modify = min(num_modify, len(maskable_indices))
-    modified_indices = random.sample(maskable_indices, num_modify)
+    lines = text.splitlines(keepends=True)
+    tokenized_lines = [tokenizer.tokenize(line) for line in lines]
+    # Flatten tokens and keep index mapping
+    flat_tokens = []
+    position_map = []  # Stores (line_idx, token_idx) to reconstruct later
+    for line_idx, line_tokens in enumerate(tokenized_lines):
+        for token_idx, token in enumerate(line_tokens):
+            flat_tokens.append(token)
+            position_map.append((line_idx, token_idx))
+
+    words_only_indices = [i for i, token in enumerate(flat_tokens) if token not in tokenizer.all_special_tokens and token.isalpha()]
+
+    num_modify = min(num_modify, len(words_only_indices))
+    modified_indices = random.sample(words_only_indices, num_modify)
 
     for idx in modified_indices:
-        original_token = tokens[idx]
+        original_token = flat_tokens[idx]
         # print(tokenizer.decode(tokenizer.convert_tokens_to_ids(original_token)))
-        tokens[idx] = '[MASK]'
+        flat_tokens[idx] = '[MASK]'
 
         # Encode masked tokens
-        input_ids = tokenizer.encode(tokens, return_tensors='pt')
+        input_ids = tokenizer.encode(flat_tokens, return_tensors='pt')
         mask_idx = (input_ids == tokenizer.mask_token_id).nonzero(as_tuple=True)[1].item()
 
         with torch.no_grad():
@@ -152,15 +197,27 @@ def mask_modify_text(text, num_modify):
         predicted_token_id = predictions[0, mask_idx].argmax().item()
         predicted_token = tokenizer.convert_ids_to_tokens([predicted_token_id])[0]
 
-        tokens[idx] = predicted_token
+        flat_tokens[idx] = predicted_token
 
-    modified_text = tokenizer.convert_tokens_to_string(tokens)
+    for i, token in enumerate(flat_tokens):
+        line_idx, token_idx = position_map[i]
+        tokenized_lines[line_idx][token_idx] = token
 
-    modified_text = re.sub(r'\s+([.,!?;:])', r'\1', modified_text)
-    # Fix spacing around apostrophes (e.g., it ' s → it's)
-    modified_text = re.sub(r"\s*'\s*", "'", modified_text)
-    # print(modified_text)
-    return modified_text
+    detokenized_lines = []
+    for line_tokens, original_line in zip(tokenized_lines, lines):
+        detok = tokenizer.convert_tokens_to_string(line_tokens)
+        # Fix spacing around apostrophes (e.g., it ' s → it's)
+        detok = re.sub(r"\s*'\s*", "'", detok)
+        if original_line.endswith('\n'):
+            detok += '\n'
+        detokenized_lines.append(detok)
+    sentence = ''.join(detokenized_lines)
+
+    # ids = og_tokenizer.encode(sentence, return_tensors="pt").squeeze()
+    # word_list = [og_tokenizer.decode(id) for id in ids]
+    # print(f"final: {word_list}")
+    
+    return sentence
     
 def delete_text(tokenizer, text, num_delete):
     ids = tokenizer.encode(text, return_tensors="pt").squeeze()
@@ -188,3 +245,13 @@ def insert_text(tokenizer, vocab_size, text, num_insert):
     
     text = tokenizer.decode(ids, skip_special_tokens=True)
     return text
+
+def duplicate_text(text, num_insert):
+    words = text.split()
+    num_insert = min(num_insert, len(words))  
+    indices_to_duplicate = sorted(random.sample(range(len(words)), num_insert), reverse=True)
+
+    for idx in indices_to_duplicate:
+        words.insert(idx, words[idx])
+
+    return ' '.join(words)

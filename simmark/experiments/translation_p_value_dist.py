@@ -5,15 +5,15 @@ import scienceplots
 import pandas as pd
 import numpy as np
 
-from .utils import load_llm_config, test_watermark, load_prompts, cbcolors, linestyles
+from .utils import load_llm_config, test_watermark, load_prompts, cbcolors, linestyles, METHODS
 
-def translation_p_value_violin(k, b, num_tokens, filename):
+def translation_p_value_violin(filename, k=4, b=4, num_tokens=100):
     llm_config = load_llm_config('facebook/opt-125m')
 
     prompts = load_prompts(filename=filename)
 
-    p_values = {"SimMark": {}, "SoftRedList": {}, "Unigram": {}, "ExpMin": {}, "HashlessExpMin": {}, "SynthID": {}}
-    gen_methods = [f"simmark_{k}_{b}", "softred", "unigram", "expmin", "expminnohash", "synthid"]
+    p_values = {"SimMark": {}, "SoftRedList": {}, "Unigram": {}, "ExpMin": {}, "SynthID": {}}
+    gen_methods = [f"simmark_{k}_{b}", "softred", "unigram", "expmin", "synthid"]
 
     for method, gen_method in zip(list(p_values.keys()), gen_methods):
         # Generate without watermark, no attack, and detection
@@ -61,15 +61,16 @@ def translation_p_value_violin(k, b, num_tokens, filename):
     plt.ylim(1e-20, 1)
     plt.ylabel("p-value (log scale)")
     plt.xlabel("Watermarking Technique")
-    plt.title(rf"Distribution of p-values for $k={k}$, $b={b}$, $n={num_tokens}$")
+    plt.title(rf"Distribution of p-values for all methods")
     plt.legend(title="Category", loc="upper left", bbox_to_anchor=(1, 1), fontsize=12)
     plt.grid(True, which="both", linestyle="--", linewidth=0.5)
     plt.savefig(f"figures/translation_p_val_dist_{k}_{b}_{num_tokens}.pdf")
 
-def plot_p_value_dist_translation(method, num_tokens, filename):
+def plot_p_value_dist_translation(method_name, num_tokens, filename, k=4, b=4):
     llm_config = load_llm_config('facebook/opt-125m')
-
     prompts = load_prompts(filename=filename)
+
+    method = f"simmark_{k}_{b}" if method_name == "SimMark" else METHODS[method_name]
 
     detection_name = method
 
@@ -81,12 +82,12 @@ def plot_p_value_dist_translation(method, num_tokens, filename):
     )
 
     # Generate with simhash watermark, no attack, and detection
-    p_values[method] = test_watermark(
+    p_values[method_name] = test_watermark(
         prompts, num_tokens, llm_config, method, detection_name
     )
 
     # Generate with simhash watermark, with attack, and detection
-    p_values[f'{method} + Translation'] = test_watermark(
+    p_values[f'{method_name} + Translation'] = test_watermark(
         prompts, num_tokens, llm_config, method, detection_name, "translate"
     )
 
@@ -112,7 +113,7 @@ def plot_p_value_dist_translation(method, num_tokens, filename):
     
     plt.xlabel(r"$p$-value")
     plt.ylabel("Frequency")
-    plt.title(rf"{method} $p$-values for $n={num_tokens}$")
+    plt.title(rf"{method_name} $p$-values for $n={num_tokens}$")
     plt.legend()
 
     plt.savefig(f"figures/translation_p_val_dist_{method}_{num_tokens}.pdf")

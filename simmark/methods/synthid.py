@@ -99,7 +99,6 @@ def synthid_detect(text, config):
 
     # distribution parameters
     shape = (len(ids) - prior_tokens) * len(g_values)
-    print(cost, shape)
 
     score = cost / shape
 

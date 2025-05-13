@@ -1,6 +1,6 @@
 
 from ..methods import logit_processors, detection_methods
-from simmark.experiments.attacks import modify_text, delete_text, insert_text, translate_text, mask_modify_text
+from simmark.experiments.attacks import modify_text, delete_text, insert_text, translate_text, mask_modify_text, duplicate_text
 from transformers import LogitsProcessorList, TemperatureLogitsWarper, TopKLogitsWarper, TopPLogitsWarper
 import torch
 import numpy as np
@@ -21,6 +21,24 @@ cbcolors = [
     '#6699CC',  # Light blue
     '#AA4499',  # Purple
 ]
+
+COLORS = {
+    "SimMark": "#1f77b4",  # blue
+    "ExpMin": "#ff7f0e",  # orange
+    "SoftRedList": "#2ca02c",  # green
+    "Unigram": "#d62728",  # red
+    "SynthID": "#9467bd",  # purple
+    "No Watermark": "#8c564b",  # brown
+}
+
+METHODS = {
+    "SimMark": "simmark",
+    "ExpMin": "expmin",
+    "SoftRedList": "softred",
+    "Unigram": "unigram",
+    "SynthID": "synthid",
+    "No Watermark": "nomark"
+}
 
 def load_prompts(filename):
     prompts = []
@@ -45,9 +63,9 @@ def load_llm_config(model_name):
 def extract_watermark_config(generation_name, watermark_config):
     method = generation_name.split("_")[0]
     watermark_config['method'] = method
-    k = 5
-    if method == "simmark" or method == "simmarkemp":
-        b = 30
+    if method == "simmark":
+        k = 4
+        b = 4
         if '_' in generation_name:
             k = int(generation_name.split("_")[1])
             b = int(generation_name.split("_")[2])
@@ -55,14 +73,8 @@ def extract_watermark_config(generation_name, watermark_config):
         watermark_config['b'] = b
         watermark_config['transformer_model'] = SentenceTransformer('all-MiniLM-L6-v2')
     elif method == "expmin":
-        prior_tokens = 3
-        if '_' in generation_name:
-            prior_tokens = int(generation_name.split("_")[1])
-        watermark_config['prior_tokens'] = prior_tokens 
-        watermark_config['k'] = k
-    elif method == "expminnohash":
         watermark_config['n'] = 150
-        watermark_config['n_runs'] = 1000
+        watermark_config['k'] = 8
     elif method == "softred": 
         n_gram = 2
         if '_' in generation_name:
@@ -107,10 +119,6 @@ def generate(text_start, num_tokens, llm_config, generation_name, seed=42, top_p
         pad_token_id=llm_config['tokenizer'].eos_token_id
     )
     print('Generation complete!')
-    # score = outputs.scores[0][0] # first generated token
-    # print((score == float('-inf')).sum())   # how many -inf values?
-    # print(score.shape)                      # shape of the tensor
-    # print([value.item() for value in score if value != float('-inf')])
 
     return llm_config['tokenizer'].decode(outputs[0], skip_special_tokens=True)
 
@@ -147,17 +155,6 @@ def read_data(filename):
                 outputs[key].append(line[key])
     return outputs
 
-# def extract_attack(llm_config, attack_name):
-#     if 'modify' in attack_name:
-#         num_modify = int(attack_name.split('_')[1])
-#         return lambda text : modify_text(
-#             llm_config['tokenizer'],
-#             llm_config['vocab_size'],
-#             text,
-#             num_modify=num_modify
-#         )
-#     else:
-#         raise ValueError(f"Unknown attack method: {attack_name}")
 
 def extract_attack(llm_config, attack_name):
     attack_parts = attack_name.split('_')
@@ -187,14 +184,20 @@ def extract_attack(llm_config, attack_name):
         )
     elif attack_type == "translate": # Translation attack
         return lambda text: translate_text(
-            text, 
+            text=text, 
             translate_whole=translate_whole,
             num_modify=num_changes
         )
     elif attack_type == "mask": # Mask modify attack
         return lambda text: mask_modify_text(
-            text,
+            og_tokenizer=llm_config['tokenizer'],
+            text=text,
             num_modify=num_changes
+        )
+    elif attack_type == "duplicate": # Duplicate insertion attack
+        return lambda text: duplicate_text(
+            text=text,
+            num_insert=num_changes
         )
     else:
         raise ValueError(f"Unknown attack method: {attack_name}")
@@ -246,21 +249,93 @@ def test_watermark(prompts, num_tokens, llm_config, generation_name, detection_n
 
     return p_values
 
+# def test_distortion(prompts, num_tokens, llm_config, generation_name, detection_name, attack_name="", seed=42, folder='data/'):
+#     perplexity_list = []
+#     filename = folder + f'{generation_name}_{detection_name}_{attack_name}.txt'
+#     cached_data = read_data(filename)
+#     matches = ['prompt', 'seed', 'num_tokens']
+#     print(f"Calculating distortion for generator: {generation_name}, detector: {detection_name}, attack: {attack_name if attack_name else "None"}")
+#     for prompt in prompts:
+#         generated_text = ""
+#         # Check if prompt and seed is already in cached data
+#         try:
+#             # Find all indices where the prompt matches
+#             indices = [i for i, p in enumerate(cached_data['prompt']) if p == prompt]
+
+#             is_match = len(indices)>0
+#             # Check if any of those indices match seed and num_tokens
+#             for idx in indices:
+#                 is_match = True
+#                 for match in matches:
+#                     if cached_data[match][idx] != locals()[match]:
+#                         is_match = False
+#                 if is_match:
+#                     generated_text = cached_data['generated_text'][idx]
+#                     perplexity_list.append(sentence_perplexity(prompt, generated_text, llm_config))
+#                     break
+
+#             if is_match:
+#                 continue  # Skip generating text if we found a cached match
+#         except (KeyError, ValueError):
+#             pass
+
+#         generated_text = generate(prompt, num_tokens, llm_config, generation_name, seed=seed)
+#         if attack_name != "":
+#             attack_method = extract_attack(llm_config, attack_name)
+#             generated_text = attack_method(generated_text)
+#         p_value = detect(generated_text, llm_config, detection_name, seed=seed) # Calculate p_value to be stored for later use
+#         # Save output to file
+#         output = {
+#             'prompt': prompt,
+#             'generated_text': generated_text,
+#             'p_value': p_value,
+#             'seed' : seed,
+#             'num_tokens' : num_tokens,
+#         }
+#         with open(filename, 'a') as f:
+#             f.write(str(output) + '\n')
+#         perplexity_list.append(sentence_perplexity(prompt, generated_text, llm_config))
+    
+#     return perplexity_list
+
 def test_distortion(prompts, num_tokens, llm_config, generation_name, detection_name, attack_name="", seed=42, folder='data/'):
     perplexity_list = []
-    filename = folder + f'{generation_name}_{detection_name}_{attack_name}.txt'
-    cached_data = read_data(filename)
-    matches = ['prompt', 'seed', 'num_tokens']
-    print(f"Calculating distortion for generator: {generation_name}, detector: {detection_name}, attack: {attack_name if attack_name else "None"}")
-    for prompt in prompts:
-        generated_text = ""
-        # Check if prompt and seed is already in cached data
-        try:
-            # Find all indices where the prompt matches
-            indices = [i for i, p in enumerate(cached_data['prompt']) if p == prompt]
 
-            is_match = len(indices)>0
-            # Check if any of those indices match seed and num_tokens
+    # file where generated text is stored
+    filename = folder + f'{generation_name}_{detection_name}_{attack_name}.txt'
+    # file where perplexities are stored
+    distortion_filename = folder + f'{generation_name}_{detection_name}_{attack_name}_distortion.txt'
+
+    cached_data = read_data(filename)
+    distortion_data = read_data(distortion_filename)
+    matches = ['prompt', 'seed', 'num_tokens']
+
+    print(f"Calculating distortion for generator: {generation_name}, detector: {detection_name}, attack: {attack_name if attack_name else 'None'}")
+
+    for prompt in prompts:
+        # First check if we already have the perplexity cached
+        try:
+            indices = [i for i, p in enumerate(distortion_data['prompt']) if p == prompt]
+
+            is_match = len(indices) > 0
+            for idx in indices:
+                is_match = True
+                for match in matches:
+                    if distortion_data[match][idx] != locals()[match]:
+                        is_match = False
+                if is_match:
+                    perplexity_list.append(distortion_data['perplexity'][idx])
+                    break
+            if is_match:
+                continue  # Skip everything if perplexity already computed
+        except (KeyError, ValueError):
+            pass
+
+        # Try reading from generation cache
+        generated_text = ""
+        try:
+            indices = [i for i, p in enumerate(cached_data['prompt']) if p == prompt]
+            is_match = len(indices) > 0
             for idx in indices:
                 is_match = True
                 for match in matches:
@@ -268,31 +343,40 @@ def test_distortion(prompts, num_tokens, llm_config, generation_name, detection_
                         is_match = False
                 if is_match:
                     generated_text = cached_data['generated_text'][idx]
-                    perplexity_list.append(sentence_perplexity(prompt, generated_text, llm_config))
                     break
-
-            if is_match:
-                continue  # Skip generating text if we found a cached match
         except (KeyError, ValueError):
-            pass
+            is_match = False
 
-        generated_text = generate(prompt, num_tokens, llm_config, generation_name, seed=seed)
-        if attack_name != "":
-            attack_method = extract_attack(llm_config, attack_name)
-            generated_text = attack_method(generated_text)
-        p_value = detect(generated_text, llm_config, detection_name, seed=seed) # Calculate p_value to be stored for later use
-        # Save output to file
-        output = {
+        # If not found, generate
+        if not is_match:
+            generated_text = generate(prompt, num_tokens, llm_config, generation_name, seed=seed)
+            if attack_name != "":
+                attack_method = extract_attack(llm_config, attack_name)
+                generated_text = attack_method(generated_text)
+            p_value = detect(generated_text, llm_config, detection_name, seed=seed)
+            # Save generation + p_value
+            output = {
+                'prompt': prompt,
+                'generated_text': generated_text,
+                'p_value': p_value,
+                'seed': seed,
+                'num_tokens': num_tokens,
+            }
+            with open(filename, 'a') as f:
+                f.write(str(output) + '\n')
+
+        # Compute and save perplexity
+        perp = sentence_perplexity(prompt, generated_text, llm_config)
+        perplexity_list.append(perp)
+        distortion_output = {
             'prompt': prompt,
-            'generated_text': generated_text,
-            'p_value': p_value,
-            'seed' : seed,
-            'num_tokens' : num_tokens,
+            'perplexity': perp,
+            'seed': seed,
+            'num_tokens': num_tokens,
         }
-        with open(filename, 'a') as f:
-            f.write(str(output) + '\n')
-        perplexity_list.append(sentence_perplexity(prompt, generated_text, llm_config))
-    
+        with open(distortion_filename, 'a') as f:
+            f.write(str(distortion_output) + '\n')
+
     return perplexity_list
         
 def sentence_perplexity(prompt, generated_text, llm_config):
@@ -305,13 +389,8 @@ def sentence_perplexity(prompt, generated_text, llm_config):
             input_text = llm_config['tokenizer'].decode(input_ids, skip_special_tokens=True)
             input_tensor = llm_config['tokenizer'](input_text, return_tensors="pt")["input_ids"]
             original_logits = llm_config['model'](input_tensor).logits
-            # if input_text == "Once upon a":
-            #     print(f"The first ten indices of logits for prompt \"{input_text}\": {original_logits[0,-1,:10]}")
             original_probs = torch.softmax(original_logits[0,-1,:], dim=-1)
             token_probs.append(torch.log(original_probs[ids[len(input_ids)].item()]))
-            # print(torch.topk(original_probs, k=10))
-            # print(f"len(input_ids) = {len(input_ids)}")
-            # print(original_probs[ids[len(input_ids)].item()])
 
             input_ids = torch.cat((input_ids, ids[len(input_ids)].unsqueeze(0)))
 

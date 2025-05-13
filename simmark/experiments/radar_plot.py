@@ -4,10 +4,11 @@ import matplotlib.pyplot as plt
 import scienceplots
 import pandas as pd
 import numpy as np
+from scipy.stats import wasserstein_distance
 
-from .utils import load_llm_config, test_watermark, load_prompts, test_distortion, detect, read_data
+from .utils import load_llm_config, test_watermark, load_prompts, test_distortion, detect, read_data, COLORS
 
-def get_robustness(method, num_tokens, filename):
+def get_robustness(method, attack, num_tokens, filename):
     llm_config = load_llm_config('facebook/opt-125m')
 
     prompts = load_prompts(filename=filename)
@@ -15,37 +16,55 @@ def get_robustness(method, num_tokens, filename):
     detection_name = method
 
     p_values_translated = test_watermark(
-        prompts, num_tokens, llm_config, method, detection_name, "translate"
+        prompts, num_tokens, llm_config, method, detection_name, attack
     )
     p_values_translated = np.array(p_values_translated)
 
     threshold = 1e-2
     true_positive_rate = np.mean(p_values_translated < threshold)
 
-    print(f"Robustness for {method}: true positive rate = {true_positive_rate}")
+    print(f"Robustness ({attack}) for {method}: true positive rate = {true_positive_rate}")
 
     return true_positive_rate
 
-def get_distortion_freeness(method, num_tokens, filename):
+def get_sensitivity(method, num_tokens, filename):
     llm_config = load_llm_config('facebook/opt-125m')
 
     prompts = load_prompts(filename=filename)
 
     detection_name = method
 
-    perplexity_no_watermark = np.median(test_distortion(
+    p_values_translated = test_watermark(
+        prompts, num_tokens, llm_config, method, detection_name, "modify_20"
+    )
+    p_values_translated = np.array(p_values_translated)
+
+    threshold = 1e-2
+    negative_rate = np.mean(p_values_translated > threshold)
+
+    print(f"Sensitivity for {method}: negative rate = {negative_rate}")
+
+    return negative_rate
+
+def get_distortion(method, num_tokens, filename):
+    llm_config = load_llm_config('facebook/opt-125m')
+
+    prompts = load_prompts(filename=filename)
+
+    detection_name = method
+
+    perplexity_no_watermark = test_distortion(
         prompts, num_tokens, llm_config, "nomark", detection_name
-    ))
-    perplexity_watermarked = np.median(test_distortion(
+    )
+    perplexity_watermarked = test_distortion(
         prompts, num_tokens, llm_config, method, detection_name
-    ))
+    )
 
-    # distortion_freeness = 1 / (1 + abs(perplexity_no_watermark - perplexity_watermarked) / perplexity_no_watermark)
-    distortion_freeness = np.exp( -abs(perplexity_no_watermark - perplexity_watermarked) / perplexity_no_watermark)
+    w_dist = wasserstein_distance(perplexity_no_watermark, perplexity_watermarked)
 
-    print(f"Distortion freeness for {method}: {distortion_freeness}")
+    print(f"Distortion for {method}: {w_dist}")
 
-    return distortion_freeness
+    return w_dist
 
 def get_unforgeability(method, num_tokens, filename, num_inject=6, num_unwatermarked=6, folder="data/", seed=42):
     llm_config = load_llm_config('facebook/opt-125m')
@@ -139,7 +158,7 @@ def get_unforgeability_sadasivan(method, num_tokens, filename, folder="data/", s
     cache_file = folder + f"nomark_{method}_.txt"
     cached_data = read_data(cache_file)
 
-    output_file = folder + f"{method}_forgeability.txt"
+    output_file = folder + f"{method}_forgeability_sadasivan.txt"
     detected_p_values = []
 
     p_values = test_watermark(
@@ -222,24 +241,30 @@ def normalize_scores(techniques, criteria, log=False, inverse=False):
         technique[criteria] = normalized_score
     return techniques
 
-def generate_radar_plot(k, b, num_tokens, filename, log=False):
-    method_names = ["SimMark", "SoftRedList", "Unigram", "ExpMin", "HashlessExpMin", "SynthID"]
-    methods = [f"simmark_{k}_{b}", "softred", "unigram", "expmin", "expminnohash", "synthid"]
+def generate_radar_plot(num_tokens, filename, k=4, b=4):
+    method_names = ["SimMark", "SoftRedList", "Unigram", "ExpMin", "SynthID"]
+    methods = [f"simmark_{k}_{b}", "softred", "unigram", "expmin", "synthid"]
     techniques = {}
 
     for method_name, method in zip(method_names, methods):
-        robustness = get_robustness(method, num_tokens, filename)
-        distortion_freeness = get_distortion_freeness(method, num_tokens, filename)
+        robustness_translate = get_robustness(method, "translate", num_tokens, filename)
+        robustness_duplicate = get_robustness(method, "duplicate_20", num_tokens, filename)
+        sensitivity = get_sensitivity(method, num_tokens, filename)
+        distortion_freeness = get_distortion(method, num_tokens, filename)
         unforgeability = get_unforgeability(method, num_tokens, filename)
-        techniques[method_name] = {"robust": robustness, "distortion free": distortion_freeness, "unforgeability": unforgeability}
-    
-    if log:
-        techniques = normalize_scores(techniques, "robust", log=True, inverse=False)
-        techniques = normalize_scores(techniques, "distortion free", log=True, inverse=False)
-        techniques = normalize_scores(techniques, "unforgeability", log=True, inverse=False)
+        techniques[method_name] = {
+            "Robust to Translation": robustness_translate, 
+            "Robust to Related Word Insertion": robustness_duplicate,
+            "Sensitivity to Harmful Attacks": sensitivity,
+            "Distortion-free": distortion_freeness, 
+            "Unforgeable (Insert)": unforgeability
+        }
+    techniques = normalize_scores(techniques, "Distortion-free", log=False, inverse=True)
 
     labels = list(techniques[method_names[0]].keys())
     num_vars = len(labels)
+
+    plt.style.use(['science'])
 
     # Compute angles for radar chart
     angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
@@ -252,8 +277,8 @@ def generate_radar_plot(k, b, num_tokens, filename, log=False):
     for name, scores in techniques.items():
         values = list(scores.values())
         values += values[:1]  # repeat first value to close the plot
-        ax.plot(angles, values, label=name)
-        ax.fill(angles, values, alpha=0.1)
+        ax.plot(angles, values, label=name, color=COLORS[name])
+        ax.fill(angles, values, alpha=0.1, color=COLORS[name])
 
     # Set category labels
     ax.set_xticks(angles[:-1])
@@ -268,60 +293,5 @@ def generate_radar_plot(k, b, num_tokens, filename, log=False):
     ax.set_title("Watermarking Technique Comparison", size=15)
     plt.tight_layout()
 
-    if not log:
-        plt.savefig(f"Figures/radar_{k}_{b}.pdf")
-    else:
-        plt.savefig(f"Figures/radar_log_{k}_{b}.pdf")
-    plt.close()
-
-def generate_radar_comparison(kb_list, num_tokens, filename):
-    """
-    kb_list should be a list of tuples (k,b)
-    """
-    method_names = []
-    methods = []
-    for k, b in kb_list:
-        method_names.append(f"SimMark{k}-{b}")
-        methods.append(f"simmark_{k}_{b}")
-    method_names += ["SoftRedList", "Unigram", "ExpMin", "HashlessExpMin", "SynthID"]
-    methods += ["softred", "unigram", "expmin", "expminnohash", "synthid"]
-    techniques = {}
-
-    for method_name, method in zip(method_names, methods):
-        robustness = get_robustness(method, num_tokens, filename)
-        distortion_freeness = get_distortion_freeness(method, num_tokens, filename)
-        unforgeability = get_unforgeability(method, num_tokens, filename)
-        techniques[method_name] = {"robust": robustness, "distortion free": distortion_freeness, "unforgeability": unforgeability}
-
-    labels = list(techniques[method_names[0]].keys())
-    num_vars = len(labels)
-
-    # Compute angles for radar chart
-    angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
-    angles += angles[:1]  # complete the loop
-
-    # Initialize plot
-    fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
-
-    # Plot each technique
-    for name, scores in techniques.items():
-        values = list(scores.values())
-        values += values[:1]  # repeat first value to close the plot
-        ax.plot(angles, values, label=name)
-        ax.fill(angles, values, alpha=0.1)
-
-    # Set category labels
-    ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(labels)
-
-    # Set y-label range
-    ax.set_ylim(0, 1)
-    ax.set_yticklabels([])
-
-    # Add legend and title
-    ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1))
-    ax.set_title("Watermarking Technique Comparison", size=15)
-    plt.tight_layout()
-
-    plt.savefig("Figures/radar_comparison.pdf")
+    plt.savefig(f"Figures/radar_{k}_{b}.pdf")
     plt.close()
