@@ -27,7 +27,7 @@ COLORS = {
     "ExpMin": "#ff7f0e",  # orange
     "SoftRedList": "#2ca02c",  # green
     "Unigram": "#d62728",  # red
-    "SynthID": "#9467bd",  # purple
+    "SynthID": "#ff6ec7",  # pink
     "No Watermark": "#8c564b",  # brown
 }
 

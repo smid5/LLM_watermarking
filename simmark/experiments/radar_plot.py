@@ -253,13 +253,13 @@ def generate_radar_plot(num_tokens, filename, k=4, b=4):
         distortion_freeness = get_distortion(method, num_tokens, filename)
         unforgeability = get_unforgeability(method, num_tokens, filename)
         techniques[method_name] = {
-            "Robust to Translation": robustness_translate, 
-            "Robust to Related Word Insertion": robustness_duplicate,
-            "Sensitivity to Harmful Attacks": sensitivity,
-            "Distortion-free": distortion_freeness, 
-            "Unforgeable (Insert)": unforgeability
+            "Robustness to Translation": robustness_translate, 
+            "Robustness to \nSynonymous Insertion": robustness_duplicate,
+            "Sensitivity to \nHarmful Word Insertion": sensitivity,
+            "Distortion freeness": distortion_freeness, 
+            "Unforgeability": unforgeability
         }
-    techniques = normalize_scores(techniques, "Distortion-free", log=False, inverse=True)
+    techniques = normalize_scores(techniques, "Distortion freeness", log=False, inverse=True)
 
     labels = list(techniques[method_names[0]].keys())
     num_vars = len(labels)
@@ -271,7 +271,7 @@ def generate_radar_plot(num_tokens, filename, k=4, b=4):
     angles += angles[:1]  # complete the loop
 
     # Initialize plot
-    fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+    fig, ax = plt.subplots(figsize=(7, 7), subplot_kw=dict(polar=True))
 
     # Plot each technique
     for name, scores in techniques.items():
@@ -280,17 +280,38 @@ def generate_radar_plot(num_tokens, filename, k=4, b=4):
         ax.plot(angles, values, label=name, color=COLORS[name])
         ax.fill(angles, values, alpha=0.1, color=COLORS[name])
 
-    # Set category labels
-    ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(labels)
+    ax.set_xticks(angles[:-1])  # Skip the duplicate to avoid overlap
+    ax.set_xticklabels([''] * len(labels)) 
+
+    # Place custom labels at adjusted positions
+    for i, label in enumerate(labels):
+        angle_rad = angles[i]
+        angle_deg = np.degrees(angle_rad)
+
+        # Use polar coordinates to position labels with slight offset from the perimeter
+        x = np.cos(angle_rad)   
+        y = np.sin(angle_rad) 
+
+        # Align based on quadrant
+        if angle_deg >= 0 and angle_deg <= 90:
+            ha, va = 'left', 'bottom'
+        elif angle_deg > 90 and angle_deg <= 180:
+            ha, va = 'right', 'bottom'
+        elif angle_deg > 180 and angle_deg <= 270:
+            ha, va = 'right', 'top'
+        else:
+            ha, va = 'left', 'top'
+
+        ax.text(angle_rad, 1.1, label, ha=ha, va=va, transform=ax.transData)
+
 
     # Set y-label range
     ax.set_ylim(0, 1)
     ax.set_yticklabels([])
 
     # Add legend and title
-    ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1))
-    ax.set_title("Watermarking Technique Comparison", size=15)
+    ax.legend(loc='upper left', bbox_to_anchor=(1.3, 1.2))
+    ax.set_title("Watermarking Technique Comparison", size=15, pad=50)
     plt.tight_layout()
 
     plt.savefig(f"Figures/radar_{k}_{b}.pdf")
