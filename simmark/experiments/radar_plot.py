@@ -253,13 +253,13 @@ def generate_radar_plot(num_tokens, filename, k=4, b=4):
         distortion_freeness = get_distortion(method, num_tokens, filename)
         unforgeability = get_unforgeability(method, num_tokens, filename)
         techniques[method_name] = {
-            "Robustness to Translation": robustness_translate, 
-            "Robustness to \nSynonymous Insertion": robustness_duplicate,
-            "Sensitivity to \nHarmful Word Insertion": sensitivity,
-            "Distortion freeness": distortion_freeness, 
-            "Unforgeability": unforgeability
+            "Robustness to \nTranslation": robustness_translate, 
+            "Robustness to \nRelated Word Insertion": robustness_duplicate,
+            "Sensitivity to Unrelated \nWord Substitution": sensitivity,
+            "Distortion-freeness": distortion_freeness, 
+            "Sensitivity to Forgery": unforgeability
         }
-    techniques = normalize_scores(techniques, "Distortion freeness", log=False, inverse=True)
+    techniques = normalize_scores(techniques, "Distortion-freeness", log=False, inverse=True)
 
     labels = list(techniques[method_names[0]].keys())
     num_vars = len(labels)
@@ -277,7 +277,7 @@ def generate_radar_plot(num_tokens, filename, k=4, b=4):
     for name, scores in techniques.items():
         values = list(scores.values())
         values += values[:1]  # repeat first value to close the plot
-        ax.plot(angles, values, label=name, color=COLORS[name])
+        ax.plot(angles, values, label=name, color=COLORS[name], linewidth=2)
         ax.fill(angles, values, alpha=0.1, color=COLORS[name])
 
     ax.set_xticks(angles[:-1])  # Skip the duplicate to avoid overlap
@@ -311,7 +311,6 @@ def generate_radar_plot(num_tokens, filename, k=4, b=4):
 
     # Add legend and title
     ax.legend(loc='upper left', bbox_to_anchor=(1.3, 1.2))
-    ax.set_title("Watermarking Technique Comparison", size=15, pad=50)
     plt.tight_layout()
 
     plt.savefig(f"Figures/radar_{k}_{b}.pdf")

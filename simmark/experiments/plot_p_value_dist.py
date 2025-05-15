@@ -39,7 +39,6 @@ def plot_p_value_dist(method_name, num_tokens, filename, k=4, b=4):
     
     plt.xlabel(r"$p$-value")
     plt.ylabel("Frequency")
-    plt.title(rf"{method_name} $p$-values for $n={num_tokens}$")
     plt.legend()
 
     plt.savefig(f"figures/p_val_dist_{method}_{num_tokens}.pdf")

@@ -3,6 +3,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import scienceplots
 import numpy as np
+from matplotlib.ticker import FuncFormatter, LogLocator
 
 from .utils import load_llm_config, test_watermark, load_prompts, COLORS
 
@@ -11,18 +12,32 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 def plot_sentence_length_p_values(sentence_lengths, p_values, filename):
     plt.style.use(['science'])
-    plt.figure(figsize=(6, 4))
+    plt.figure(figsize=(7.5, 4))
+    MIN_PVAL = 1e-16
     
     for idx, (label, values) in enumerate(p_values.items()):
-        plt.plot(sentence_lengths, values, marker='o', linestyle='-', color=COLORS[label], linewidth=2, label=label)
+        clipped_values = [max(v, MIN_PVAL) for v in values]
+        plt.plot(sentence_lengths, clipped_values, marker='o', linestyle='-', color=COLORS[label], linewidth=2, label=label)
     
     plt.yscale("log")  # Set y-axis to log scale to better capture small variations
-    plt.xscale("log")
+    plt.xscale("linear")
     plt.xlabel("Sentence Length")
     plt.ylabel("Median p-Value")
-    plt.title("Sentence Length vs. Median p-Value")
-    plt.legend()
+
+    yticks = [1e0, 1e-2, 1e-4, 1e-6, 1e-8, 1e-10, 1e-12, 1e-14, MIN_PVAL]
+    plt.yticks(yticks)
+
+    # Format ticks: show "<10^-15" at bottom
+    def custom_y_ticks(val, _):
+        if val <= MIN_PVAL + 1e-20:  # Allow for float imprecision
+            return r"$<10^{-16}$"
+        exponent = int(np.log10(val))
+        return f"$10^{{{exponent}}}$"
+
+    plt.gca().yaxis.set_major_formatter(FuncFormatter(custom_y_ticks))
+    plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
     plt.grid()
+    plt.tight_layout()
     plt.savefig(filename)
     plt.close()
 

@@ -61,7 +61,7 @@ def translation_p_value_violin(filename, k=4, b=4, num_tokens=100):
     plt.ylim(1e-20, 1)
     plt.ylabel("p-value (log scale)")
     plt.xlabel("Watermarking Technique")
-    plt.title(rf"Distribution of p-values for all methods")
+    # plt.title(rf"Distribution of p-values for all methods")
     plt.legend(title="Category", loc="upper left", bbox_to_anchor=(1, 1), fontsize=12)
     plt.grid(True, which="both", linestyle="--", linewidth=0.5)
     plt.savefig(f"figures/translation_p_val_dist_{k}_{b}_{num_tokens}.pdf")
@@ -86,7 +86,7 @@ def plot_p_value_dist_translation(method_name, num_tokens, filename, k=4, b=4):
         prompts, num_tokens, llm_config, method, detection_name
     )
 
-    # Generate with simhash watermark, with attack, and detection
+    # Generate with watermark, with attack, and detection
     p_values[f'{method_name} + Translation'] = test_watermark(
         prompts, num_tokens, llm_config, method, detection_name, "translate"
     )
@@ -113,7 +113,6 @@ def plot_p_value_dist_translation(method_name, num_tokens, filename, k=4, b=4):
     
     plt.xlabel(r"$p$-value")
     plt.ylabel("Frequency")
-    plt.title(rf"{method_name} $p$-values for $n={num_tokens}$")
     plt.legend()
 
     plt.savefig(f"figures/translation_p_val_dist_{method}_{num_tokens}.pdf")

@@ -20,7 +20,6 @@ def plot_sentence_length_p_values(sentence_lengths, p_values, filename):
     plt.xscale("log")
     plt.xlabel("Sentence Length")
     plt.ylabel("Median p-Value")
-    plt.title("SimMark vs ExpMin (Non-Watermarked) Sentence Length vs. Mean p-Value")
     plt.legend()
     plt.grid()
     plt.savefig(filename)

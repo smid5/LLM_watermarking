@@ -26,10 +26,6 @@ def plot_robustness_vs_distortion(robustness, distortion, filename, num_tokens, 
     # Labels and legends
     plt.xlabel('Robustness (median p-value)')
     plt.ylabel('Distortion (median perplexity)')
-    if not attack_name:
-        plt.title(f'Robustness vs. Distortion for Watermarked text, n={num_tokens}')
-    elif attack_name=="translate": 
-        plt.title(f'Robustness vs. Distortion for Translated text, n={num_tokens}')
     
     plt.legend()
 
