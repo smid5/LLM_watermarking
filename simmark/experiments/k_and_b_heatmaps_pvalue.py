@@ -16,7 +16,6 @@ def plot_heatmap(data, k_values, b_values, title, filename):
     # sns.heatmap(data, annot=True, fmt=".1e", cmap="coolwarm", xticklabels=b_values, yticklabels=k_values)
     plt.xlabel("b")
     plt.ylabel("k")
-    plt.title(title)
     plt.savefig(filename)
     plt.close()
 
@@ -31,21 +30,16 @@ def generate_p_value_heatmaps(k_values, b_values, num_tokens, filename):
     
     for i, k in enumerate(k_values):
         for j, b in enumerate(b_values):
-            # print("k: " + str(k))
-            # print("b: " + str(b))
             detection_name = f"simmark_{k}_{b}"
             
-            # print("watermark")
             p_values_watermark[i, j] = np.median(test_watermark(
                 prompts, num_tokens, llm_config, f"simmark_{k}_{b}", detection_name
             ))
             
-            # print("nomark")
             p_values_unrelated[i, j] = np.median(test_watermark(
                 prompts, num_tokens, llm_config, "nomark", detection_name
             ))
-            
-            # print("modify")
+
             p_values_modified[i, j] = np.median(test_watermark(
                 prompts, num_tokens, llm_config, f"simmark_{k}_{b}", detection_name, "modify_1"
             ))

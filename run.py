@@ -25,8 +25,6 @@ generate_sentence_length_p_values(filename, length_variations=length_variations)
 modification_values = list(range(0, 31, 3))
 generate_p_value_modification_experiment(filename, "modify", modification_values=modification_values, num_tokens=num_tokens)
 generate_p_value_modification_experiment(filename, "translate", modification_values=modification_values, num_tokens=num_tokens)
-generate_p_value_modification_experiment(filename, "mask", modification_values=modification_values, num_tokens=num_tokens)
-generate_p_value_modification_experiment(filename, "insert", modification_values=modification_values, num_tokens=num_tokens)
 generate_p_value_modification_experiment(filename, "duplicate", modification_values=modification_values, num_tokens=num_tokens)
 
 translation_p_value_violin(filename=filename, num_tokens=num_tokens)

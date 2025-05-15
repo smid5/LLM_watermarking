@@ -8,7 +8,7 @@ import numpy as np
 
 from .utils import test_watermark, load_llm_config, load_prompts, modify_text, cbcolors, COLORS
 
-def plot_p_value_modifications(modifications, p_values_dict, filename, title):
+def plot_p_value_modifications(modifications, p_values_dict, filename, xlabel):
     plt.style.use(['science'])
     plt.figure(figsize=(6, 4))
     
@@ -16,10 +16,9 @@ def plot_p_value_modifications(modifications, p_values_dict, filename, title):
     for idx, (label, values) in enumerate(p_values_dict.items()):
         plt.plot(modifications, values, marker='o', linestyle='-', color=COLORS[label], linewidth=2, label=label)
 
-    plt.yscale("log")  # Set y-axis to log scale for better visualization
-    plt.xlabel("Number of Modifications")
-    plt.ylabel("Median p-Value")
-    plt.title(title)
+    plt.yscale("linear")  
+    plt.xlabel(xlabel)
+    plt.ylabel("Percent with p-value below .01")
     plt.legend()
     plt.grid()
     plt.xticks(modifications)
@@ -44,43 +43,35 @@ def generate_p_value_modification_experiment(filename, attack, k=4, b=4, modific
     for i, num_modify in enumerate(modification_values):
 
         # Compute p-values for each method
-        p_values["SimMark"][i] = np.median(test_watermark(
+        threshold = 1e-2
+        p_values["SimMark"][i] = np.mean(np.array(test_watermark(
             prompts, num_tokens, llm_config, f"simmark_{k}_{b}", f"simmark_{k}_{b}", f"{attack}_{num_modify}"
-        ))
+        ))<threshold)*100
 
-        p_values["Unigram"][i] = np.median(test_watermark(
+        p_values["Unigram"][i] = np.mean(np.array(test_watermark(
             prompts, num_tokens, llm_config, "unigram", "unigram", f"{attack}_{num_modify}"
-        ))
+        ))<threshold)*100
 
-        p_values["SoftRedList"][i] = np.median(test_watermark(
+        p_values["SoftRedList"][i] = np.mean(np.array(test_watermark(
             prompts, num_tokens, llm_config, "softred", "softred", f"{attack}_{num_modify}"
-        ))
+        ))<threshold)*100
 
-        p_values["ExpMin"][i] = np.median(test_watermark(
+        p_values["ExpMin"][i] = np.mean(np.array(test_watermark(
             prompts, num_tokens, llm_config, "expmin", "expmin", f"{attack}_{num_modify}"
-        ))
+        ))<threshold)*100
 
-        p_values["SynthID"][i] = np.median(test_watermark(
+        p_values["SynthID"][i] = np.mean(np.array(test_watermark(
             prompts, num_tokens, llm_config, "synthid", "synthid", f"{attack}_{num_modify}"
-        ))
+        ))<threshold)*100
 
-    if attack=="modify":
-        title = "Effect of Modifications on p-Values"
-        save_filename = f"figures/p_value_vs_modifications_k{k}_b{b}.pdf"
+    save_filename = f"figures/p_value_vs_{attack}_attack_k{k}_b{b}.pdf"
+    if attack=="duplicate":
+        xlabel="Number of Duplicate Word Insertions"
+    elif attack=="modify":
+        xlabel="Number of Unrelated Word Replacements"
     elif attack=="translate":
-        title = "Effect of Translation Modifications on p-Values"
-        save_filename = f"figures/p_value_vs_translation_modifications_k{k}_b{b}.pdf"
-    elif attack=="mask":
-        title = "Effect of Mask Modifications on p-Values"
-        save_filename = f"figures/p_value_vs_mask_modifications_k{k}_b{b}.pdf"
-    elif attack=="delete":
-        title = "Effect of Deletions on p-Values"
-        save_filename = f"figures/p_value_vs_deletions_k{k}_b{b}.pdf"
-    elif attack=="insert":
-        title = "Effect of Insertions on p-Values"
-        save_filename = f"figures/p_value_vs_insertions_k{k}_b{b}.pdf"
-    elif attack=="duplicate":
-        title = "Effect of Duplicate Insertions on p-Values"
-        save_filename = f"figures/p_value_vs_duplications_k{k}_b{b}.pdf"
+        xlabel="Number of Translated Word Replacements"
+    else:
+        xlabel="Number of Word Modifications"
     # Generate plot
-    plot_p_value_modifications(modifications, p_values, save_filename, title)
+    plot_p_value_modifications(modifications, p_values, save_filename, xlabel)

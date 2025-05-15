@@ -31,7 +31,6 @@ def plot_distortion_dist(num_tokens, filename, k=4, b=4):
     
     plt.xlabel("Perplexity")
     plt.ylabel("Frequency")
-    plt.title(f"Perplexity Comparison for $n={num_tokens}$")
     plt.legend()
 
     plt.savefig(f"figures/perplexity_dist_{num_tokens}.pdf")
