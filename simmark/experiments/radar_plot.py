@@ -255,7 +255,7 @@ def generate_radar_plot(num_tokens, filename, k=4, b=4):
         techniques[method_name] = {
             "Robustness to \nTranslation": robustness_translate, 
             "Robustness to \nRelated Word Insertion": robustness_duplicate,
-            "Sensitivity to Unrelated \nWord Substitution": sensitivity,
+            "Sensitivity to Unrelated \nToken Substitution": sensitivity,
             "Distortion-freeness": distortion_freeness, 
             "Sensitivity to Forgery": unforgeability
         }

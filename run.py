@@ -1,6 +1,6 @@
 from simmark.experiments.plot_p_value_dist import plot_p_value_dist
 from simmark.experiments.k_and_b_heatmaps_pvalue import generate_p_value_heatmaps
-from simmark.experiments.num_modifications_vs_p_value import generate_p_value_modification_experiment
+from simmark.experiments.num_modifications_vs_p_value import plot_modification_comparison
 from simmark.experiments.sentence_length_vs_p_value import generate_sentence_length_p_values
 from simmark.experiments.translation_p_value_dist import translation_p_value_violin, plot_p_value_dist_translation
 from simmark.experiments.robustness_vs_distortion import generate_robustness_vs_distortion
@@ -23,9 +23,8 @@ length_variations = list(range(25, 105, 5))
 generate_sentence_length_p_values(filename, length_variations=length_variations)
 
 modification_values = list(range(0, 31, 3))
-generate_p_value_modification_experiment(filename, "modify", modification_values=modification_values, num_tokens=num_tokens)
-generate_p_value_modification_experiment(filename, "translate", modification_values=modification_values, num_tokens=num_tokens)
-generate_p_value_modification_experiment(filename, "duplicate", modification_values=modification_values, num_tokens=num_tokens)
+attacks = ["modify", "translate", "duplicate"]
+plot_modification_comparison(filename=filename, attacks=attacks, modification_values=modification_values, num_tokens=num_tokens)
 
 translation_p_value_violin(filename=filename, num_tokens=num_tokens)
 plot_p_value_dist_translation("SimMark", num_tokens, filename)
