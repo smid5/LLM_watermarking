@@ -41,11 +41,13 @@ def plot_sentence_length_p_values(sentence_lengths, p_values, filename):
     plt.savefig(filename)
     plt.close()
 
-def generate_sentence_length_p_values(filename, k=4, b=4, length_variations=list(range(25, 105, 5))):
+def generate_sentence_length_p_values(filename, k=4, b=4, length_variations=list(range(25, 105, 5)), seeds=[42]):
     llm_config = load_llm_config('facebook/opt-125m')
     prompts = load_prompts(filename=filename)
     
     p_values = {"No Watermark": {}, "SimMark": {}, "SoftRedList": {}, "Unigram": {}, "ExpMin": {}, "SynthID": {}}
+    generation_methods = ["nomark", f"simmark_{k}_{b}", "softred", "unigram", "expmin", "synthid"]
+    detection_methods = [f"simmark_{k}_{b}", f"simmark_{k}_{b}", "softred", "unigram", "expmin", "synthid"]
     
     for length in length_variations:
         applicable_prompts = [p for p in prompts if len(p.split()) < length]
@@ -53,37 +55,18 @@ def generate_sentence_length_p_values(filename, k=4, b=4, length_variations=list
             continue
         
         num_tokens_list = [length - len(p.split()) for p in applicable_prompts]
-        
-        p_values["No Watermark"][length] = np.median(
-            [test_watermark([p], num_tokens, llm_config, "nomark", f"simmark_{k}_{b}")[0] 
-             for p, num_tokens in zip(applicable_prompts, num_tokens_list)]
-        )
-        
-        p_values["SimMark"][length] = np.median(
-            [test_watermark([p], num_tokens, llm_config, f"simmark_{k}_{b}", f"simmark_{k}_{b}")[0] 
-             for p, num_tokens in zip(applicable_prompts, num_tokens_list)]
-        )
-        
-        p_values["SoftRedList"][length] = np.median(
-            [test_watermark([p], num_tokens, llm_config, "softred", "softred")[0] 
-             for p, num_tokens in zip(applicable_prompts, num_tokens_list)]
-        )
 
-        p_values["Unigram"][length] = np.median(
-            [test_watermark([p], num_tokens, llm_config, "unigram", "unigram")[0] 
-             for p, num_tokens in zip(applicable_prompts, num_tokens_list)]
-        )
-        
-        p_values["ExpMin"][length] = np.median(
-            [test_watermark([p], num_tokens, llm_config, "expmin", "expmin")[0] 
-             for p, num_tokens in zip(applicable_prompts, num_tokens_list)]
-        )
+        for method_name, gen_method, det_method in zip(list(p_values.keys()), generation_methods, detection_methods):
+            all_pvals = []
+            for seed in seeds:
+                new_data = [
+                    test_watermark([p], num_tokens, llm_config, gen_method, det_method, seed=seed)[0]
+                    for p, num_tokens in zip(applicable_prompts, num_tokens_list)
+                ]
+                all_pvals.extend(new_data)
 
-        p_values["SynthID"][length] = np.median(
-            [test_watermark([p], num_tokens, llm_config, "synthid", "synthid")[0] 
-             for p, num_tokens in zip(applicable_prompts, num_tokens_list)]
-        )
-    
+            p_values[method_name][length] = np.median(all_pvals)
+
     sorted_lengths = sorted(p_values["No Watermark"].keys())
     for key in p_values:
         p_values[key] = [p_values[key][l] for l in sorted_lengths]

@@ -8,17 +8,20 @@ from scipy.stats import wasserstein_distance
 
 from .utils import load_llm_config, test_watermark, load_prompts, test_distortion, detect, read_data, COLORS
 
-def get_robustness(method, attack, num_tokens, filename):
+def get_robustness(method, attack, num_tokens, filename, seeds):
     llm_config = load_llm_config('facebook/opt-125m')
 
     prompts = load_prompts(filename=filename)
 
     detection_name = method
 
-    p_values_translated = test_watermark(
-        prompts, num_tokens, llm_config, method, detection_name, attack
-    )
-    p_values_translated = np.array(p_values_translated)
+    all_pvals = []
+    for seed in seeds:
+        new_data = test_watermark(
+            prompts, num_tokens, llm_config, method, detection_name, attack, seed=seed
+        )
+        all_pvals.extend(new_data)
+    p_values_translated = np.array(all_pvals)
 
     threshold = 1e-2
     true_positive_rate = np.mean(p_values_translated < threshold)
@@ -27,17 +30,20 @@ def get_robustness(method, attack, num_tokens, filename):
 
     return true_positive_rate
 
-def get_sensitivity(method, num_tokens, filename):
+def get_sensitivity(method, num_tokens, filename, seeds):
     llm_config = load_llm_config('facebook/opt-125m')
 
     prompts = load_prompts(filename=filename)
 
     detection_name = method
 
-    p_values_translated = test_watermark(
-        prompts, num_tokens, llm_config, method, detection_name, "modify_20"
-    )
-    p_values_translated = np.array(p_values_translated)
+    all_pvals = []
+    for seed in seeds:
+        new_data = test_watermark(
+            prompts, num_tokens, llm_config, method, detection_name, "modify_20", seed=seed
+        )
+        all_pvals.extend(new_data)
+    p_values_translated = np.array(all_pvals)
 
     threshold = 1e-2
     negative_rate = np.mean(p_values_translated > threshold)
@@ -46,19 +52,24 @@ def get_sensitivity(method, num_tokens, filename):
 
     return negative_rate
 
-def get_distortion(method, num_tokens, filename):
+def get_distortion(method, num_tokens, filename, seeds):
     llm_config = load_llm_config('facebook/opt-125m')
 
     prompts = load_prompts(filename=filename)
 
     detection_name = method
 
-    perplexity_no_watermark = test_distortion(
-        prompts, num_tokens, llm_config, "nomark", detection_name
-    )
-    perplexity_watermarked = test_distortion(
-        prompts, num_tokens, llm_config, method, detection_name
-    )
+    perplexity_no_watermark = []
+    perplexity_watermarked = []
+    for seed in seeds:
+        pnw = test_distortion(
+            prompts, num_tokens, llm_config, "nomark", detection_name, seed = seed
+        )
+        perplexity_no_watermark.extend(pnw)
+        pw = test_distortion(
+            prompts, num_tokens, llm_config, method, detection_name, seed=seed
+        )
+        perplexity_watermarked.extend(pw)
 
     w_dist = wasserstein_distance(perplexity_no_watermark, perplexity_watermarked)
 
@@ -66,66 +77,67 @@ def get_distortion(method, num_tokens, filename):
 
     return w_dist
 
-def get_unforgeability(method, num_tokens, filename, num_inject=6, num_unwatermarked=6, folder="data/", seed=42):
+def get_unforgeability(method, num_tokens, filename, num_inject=6, num_unwatermarked=6, folder="data/", seeds=[42]):
     llm_config = load_llm_config('facebook/opt-125m')
     prompts = load_prompts(filename=filename)
 
     output_file = folder + f"{method}_forgeability.txt"
     detected_p_values = []
 
-    p_values_watermarked = test_watermark(
-        prompts, num_tokens, llm_config, generation_name=method, detection_name=method
-    )
-    # median_i = argmedian(p_values_watermarked)
-    cache_file_watermarked = folder + f"{method}_{method}_.txt"
-    cached_data_watermarked = read_data(cache_file_watermarked)
+    for seed in seeds:
+        p_values_watermarked = test_watermark(
+            prompts, num_tokens, llm_config, generation_name=method, detection_name=method, seed=seed
+        )
+        # median_i = argmedian(p_values_watermarked)
+        cache_file_watermarked = folder + f"{method}_{method}_.txt"
+        cached_data_watermarked = read_data(cache_file_watermarked)
 
-    p_values_unwatermarked = test_watermark(
-    prompts, num_tokens, llm_config, generation_name="nomark", detection_name=method
-    )
-    cache_file_unwatermarked = folder + f"nomark_{method}_.txt"
-    cached_data_unwatermarked = read_data(cache_file_unwatermarked)
+        p_values_unwatermarked = test_watermark(
+        prompts, num_tokens, llm_config, generation_name="nomark", detection_name=method, seed=seed
+        )
+        cache_file_unwatermarked = folder + f"nomark_{method}_.txt"
+        cached_data_unwatermarked = read_data(cache_file_unwatermarked)
 
-    # median_text = extract_generated_text(prompts[median_i], cached_data_watermarked, num_tokens, seed)
-    # median_text_list = median_text.split()
-    # median_text_length = len(median_text_list)
-    watermarked_text_lists = []
-    for prompt in prompts:
-        watermarked_text = extract_generated_text(prompt, cached_data_watermarked, num_tokens, seed)
-        watermarked_text_list = watermarked_text.split()
-        watermarked_text_lists.append(watermarked_text_list)
+        # median_text = extract_generated_text(prompts[median_i], cached_data_watermarked, num_tokens, seed)
+        # median_text_list = median_text.split()
+        # median_text_length = len(median_text_list)
+        watermarked_text_lists = []
+        for prompt in prompts:
+            watermarked_text = extract_generated_text(prompt, cached_data_watermarked, num_tokens, seed)
+            watermarked_text_list = watermarked_text.split()
+            watermarked_text_lists.append(watermarked_text_list)
 
-    for prompt in prompts:
-        generated_text = extract_generated_text(prompt, cached_data_unwatermarked, num_tokens, seed)
-        generated_text_list = generated_text.split()
-        num_words = len(generated_text_list)
-        
-        for watermarked_text_list in watermarked_text_lists:
-            watermarked_text_length = len(watermarked_text_list)
-            w_idx = 0
-            spoofed = generated_text_list[:num_unwatermarked]
-            i = num_unwatermarked
+        for prompt in prompts:
+            generated_text = extract_generated_text(prompt, cached_data_unwatermarked, num_tokens, seed)
+            generated_text_list = generated_text.split()
+            num_words = len(generated_text_list)
+            
+            for watermarked_text_list in watermarked_text_lists:
+                watermarked_text_length = len(watermarked_text_list)
+                w_idx = 0
+                spoofed = generated_text_list[:num_unwatermarked]
+                i = num_unwatermarked
 
-            while i < num_words:
-                if w_idx < watermarked_text_length:
-                    spoofed.extend(watermarked_text_list[w_idx:w_idx+num_inject])
-                    w_idx += num_inject
-                
-                spoofed.extend(generated_text_list[i:i+num_unwatermarked])
-                i += num_unwatermarked
+                while i < num_words:
+                    if w_idx < watermarked_text_length:
+                        spoofed.extend(watermarked_text_list[w_idx:w_idx+num_inject])
+                        w_idx += num_inject
+                    
+                    spoofed.extend(generated_text_list[i:i+num_unwatermarked])
+                    i += num_unwatermarked
 
-            spoofed_text = ' '.join(spoofed)
-            detected_p_value = detect(spoofed_text, llm_config, method)
-            detected_p_values.append(detected_p_value)
-            output = {
-                'prompt': prompt,
-                'generated_text': spoofed_text,
-                'p_value': detected_p_value,
-                'seed' : seed,
-                'num_tokens' : num_tokens,
-            }
-            with open(output_file, 'a') as f:
-                f.write(str(output) + '\n')
+                spoofed_text = ' '.join(spoofed)
+                detected_p_value = detect(spoofed_text, llm_config, method)
+                detected_p_values.append(detected_p_value)
+                output = {
+                    'prompt': prompt,
+                    'generated_text': spoofed_text,
+                    'p_value': detected_p_value,
+                    'seed' : seed,
+                    'num_tokens' : num_tokens,
+                }
+                with open(output_file, 'a') as f:
+                    f.write(str(output) + '\n')
 
     detected_p_values = np.array(detected_p_values)
     threshold = 1e-2
@@ -241,17 +253,17 @@ def normalize_scores(techniques, criteria, log=False, inverse=False):
         technique[criteria] = normalized_score
     return techniques
 
-def generate_radar_plot(num_tokens, filename, k=4, b=4):
+def generate_radar_plot(num_tokens, filename, k=4, b=4, seeds=[42]):
     method_names = ["SimMark", "SoftRedList", "Unigram", "ExpMin", "SynthID"]
     methods = [f"simmark_{k}_{b}", "softred", "unigram", "expmin", "synthid"]
     techniques = {}
 
     for method_name, method in zip(method_names, methods):
-        robustness_translate = get_robustness(method, "translate", num_tokens, filename)
-        robustness_duplicate = get_robustness(method, "duplicate_20", num_tokens, filename)
-        sensitivity = get_sensitivity(method, num_tokens, filename)
-        distortion_freeness = get_distortion(method, num_tokens, filename)
-        unforgeability = get_unforgeability(method, num_tokens, filename)
+        robustness_translate = get_robustness(method, "translate", num_tokens, filename, seeds)
+        robustness_duplicate = get_robustness(method, "duplicate_20", num_tokens, filename, seeds)
+        sensitivity = get_sensitivity(method, num_tokens, filename, seeds)
+        distortion_freeness = get_distortion(method, num_tokens, filename, seeds)
+        unforgeability = get_unforgeability(method, num_tokens, filename, seeds)
         techniques[method_name] = {
             "Robustness to \nTranslation": robustness_translate, 
             "Robustness to \nRelated Word Insertion": robustness_duplicate,
