@@ -49,17 +49,12 @@ def generate_p_value_modification_experiment(filename, attack, k=4, b=4, modific
         threshold = 1e-2
 
         for method_name, method in zip(method_names, methods):
-            if method_name=="SimMark" or method_name=="ExpMin":
-                results = np.empty((0, num_prompts))
-                for seed in seeds:
-                    new_data = np.array(test_watermark(
-                        prompts, num_tokens, llm_config, method, method, f"{attack}_{num_modify}", seed=seed
-                    ))
-                    results = np.vstack([results, new_data])
-            else:
-                results = np.array(test_watermark(
-                        prompts, num_tokens, llm_config, method, method, f"{attack}_{num_modify}", seed=42
-                    ))
+            results = np.empty((0, num_prompts))
+            for seed in seeds:
+                new_data = np.array(test_watermark(
+                    prompts, num_tokens, llm_config, method, method, f"{attack}_{num_modify}", seed=seed
+                ))
+                results = np.vstack([results, new_data])
             p_values[method_name][i] = np.mean(results<threshold)*100
 
     save_filename = f"figures/p_value_vs_{attack}_attack_k{k}_b{b}.pdf"
@@ -112,17 +107,12 @@ def generate_p_value_modification_subplot(filename, attack, ax, k=4, b=4, modifi
         threshold = 1e-2
 
         for method_name, method in zip(method_names, methods):
-            if method_name=="SimMark" or method_name=="ExpMin":
-                results = np.empty((0, num_prompts))
-                for seed in seeds:
-                    new_data = np.array(test_watermark(
-                        prompts, num_tokens, llm_config, method, method, f"{attack}_{num_modify}", seed=seed
-                    ))
-                    results = np.vstack([results, new_data])
-            else:
-                results = np.array(test_watermark(
-                        prompts, num_tokens, llm_config, method, method, f"{attack}_{num_modify}", seed=42
-                    ))
+            results = np.empty((0, num_prompts))
+            for seed in seeds:
+                new_data = np.array(test_watermark(
+                    prompts, num_tokens, llm_config, method, method, f"{attack}_{num_modify}", seed=seed
+                ))
+                results = np.vstack([results, new_data])
             p_values[method_name][i] = np.mean(results<threshold)*100
 
     save_filename = f"figures/p_value_vs_{attack}_attack_k{k}_b{b}.pdf"
