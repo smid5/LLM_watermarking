@@ -10,10 +10,11 @@ from nltk.tokenize.treebank import TreebankWordDetokenizer
 import random
 import re
 
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
+for resource in ['punkt', 'punkt_tab']:
+    try:
+        nltk.data.find(f"tokenizers/{resource}")
+    except LookupError:
+        nltk.download(resource)
 from nltk.tokenize import word_tokenize
 
 from transformers import logging
@@ -47,35 +48,57 @@ def measure_distortion(original, modified):
     edit_ratio = Levenshtein.distance(original, modified) / max(len(original), len(modified), 1)
     return round(cosine_sim, 4), round(edit_ratio, 4)
 
+def load_translation_model(local_dir, hf_name):
+    """
+    Load translation model from local directory if available, otherwise download from Hugging Face
+    If offline, ensure the model is already cached locally
+    """
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    if os.path.exists(local_dir):
+        print(f"Loading model from local path: {local_dir}")
+        tokenizer = MarianTokenizer.from_pretrained(local_dir)
+        model = MarianMTModel.from_pretrained(local_dir).to(device)
+    else:
+        print(f"Local path not found, downloading from Hugging Face: {hf_name}")
+        tokenizer = MarianTokenizer.from_pretrained(hf_name)
+        model = MarianMTModel.from_pretrained(hf_name).to(device)
+
+    return tokenizer, model
+
 def translate_text(text, translate_whole = True, num_modify = None, language = "french"):
     """
     translate_whole=True is preferred
     """
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if language == "french":
         en_ne_model_name = "Helsinki-NLP/opus-mt-tc-big-en-fr"
         ne_en_model_name = "Helsinki-NLP/opus-mt-tc-big-fr-en"
+        en_ne_local = "./models/Helsinki-NLP--opus-mt-tc-big-en-fr"
+        ne_en_local = "./models/Helsinki-NLP--opus-mt-tc-big-fr-en"
     elif language == "russian":
-        #not working very well, occasionally hallucinates
         en_ne_model_name = "Helsinki-NLP/opus-mt-en-ru"
         ne_en_model_name = "Helsinki-NLP/opus-mt-ru-en"
+        en_ne_local = "./models/Helsinki-NLP--opus-mt-en-ru"
+        ne_en_local = "./models/Helsinki-NLP--opus-mt-ru-en"
     elif language == "german":
         en_ne_model_name = "Helsinki-NLP/opus-mt-en-de"
         ne_en_model_name = "Helsinki-NLP/opus-mt-de-en"
+        en_ne_local = "./models/Helsinki-NLP--opus-mt-en-de"
+        ne_en_local = "./models/Helsinki-NLP--opus-mt-de-en"
 
-    en_ne_tokenizer = MarianTokenizer.from_pretrained(en_ne_model_name)
-    en_ne_model = MarianMTModel.from_pretrained(en_ne_model_name)
-    ne_en_tokenizer = MarianTokenizer.from_pretrained(ne_en_model_name)
-    ne_en_model = MarianMTModel.from_pretrained(ne_en_model_name)
+    en_ne_tokenizer, en_ne_model = load_translation_model(en_ne_local, en_ne_model_name)
+    ne_en_tokenizer, ne_en_model = load_translation_model(ne_en_local, ne_en_model_name)
 
     if translate_whole:
         # Translate from English → Target Language
-        tokens = en_ne_tokenizer(text, return_tensors="pt", padding=True)
+        tokens = en_ne_tokenizer(text, return_tensors="pt", padding=True).to(device)
         translated_tokens = en_ne_model.generate(**tokens)
         translated_text = en_ne_tokenizer.decode(translated_tokens[0], skip_special_tokens=True)
 
         # Translate back from Target Language → English
-        tokens = ne_en_tokenizer(translated_text, return_tensors="pt", padding=True)
+        tokens = ne_en_tokenizer(translated_text, return_tensors="pt", padding=True).to(device)
         roundtrip_token = ne_en_model.generate(**tokens)
         roundtrip_text = ne_en_tokenizer.decode(roundtrip_token[0], skip_special_tokens=True)
 
@@ -121,12 +144,12 @@ def translate_text(text, translate_whole = True, num_modify = None, language = "
                 continue
             
             # Translate from English → Target Language
-            token = en_ne_tokenizer(original_word, return_tensors="pt", padding=True)
+            token = en_ne_tokenizer(original_word, return_tensors="pt", padding=True).to(device)
             translated_token = en_ne_model.generate(**token, max_new_tokens=5)
             translated_text = en_ne_tokenizer.decode(translated_token[0], skip_special_tokens=True)
 
             # Translate back from Target Language → English
-            token = ne_en_tokenizer(translated_text, return_tensors="pt", padding=True)
+            token = ne_en_tokenizer(translated_text, return_tensors="pt", padding=True).to(device)
             roundtrip_token = ne_en_model.generate(**token, max_new_tokens=5)
             roundtrip_text = ne_en_tokenizer.decode(roundtrip_token[0], skip_special_tokens=True)
 

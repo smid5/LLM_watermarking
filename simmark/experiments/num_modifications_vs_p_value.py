@@ -26,7 +26,7 @@ def plot_p_value_modifications(modifications, p_values_dict, filename, xlabel):
     plt.close()
 
 def generate_p_value_modification_experiment(filename, attack, k=4, b=4, modification_values = list(range(0, 31, 3)), num_tokens=100, seeds=[42]):
-    llm_config = load_llm_config('facebook/opt-125m')
+    llm_config = load_llm_config("meta-llama/Llama-3.2-3B")
     prompts = load_prompts(filename=filename)
     num_prompts = len(prompts)
     modifications = np.array(modification_values)
@@ -84,7 +84,7 @@ def subplot_p_value_modifications(modifications, p_values_dict, ax, xlabel):
     ax.set_yticks(np.arange(20, 101, 20)) 
 
 def generate_p_value_modification_subplot(filename, attack, ax, k=4, b=4, modification_values = list(range(0, 31, 3)), num_tokens=100, seeds=[42]):
-    llm_config = load_llm_config('facebook/opt-125m')
+    llm_config = load_llm_config("meta-llama/Llama-3.2-3B")
     prompts = load_prompts(filename=filename)
     num_prompts = len(prompts)
     modifications = np.array(modification_values)
@@ -128,7 +128,7 @@ def generate_p_value_modification_subplot(filename, attack, ax, k=4, b=4, modifi
     subplot_p_value_modifications(modifications, p_values, ax, xlabel)
 
 def plot_modification_comparison(filename, attacks, k=4, b=4, modification_values = list(range(0, 31, 3)), num_tokens=100, seeds=[42]):
-    plt.style.use(['science'])
+    plt.style.use(['science', 'no-latex'])
 
     # Create a figure with 3 subplots horizontally
     fig, axs = plt.subplots(1, 3, figsize=(18, 5)) 
@@ -149,5 +149,5 @@ def plot_modification_comparison(filename, attacks, k=4, b=4, modification_value
     axs[0].set_ylabel("Percent with p-value below .01", fontsize=22)
 
     plt.tight_layout(rect=[0, 0.05, 1, 1])
-    plt.savefig(f"figures/p_value_vs_attack_combined_k{k}_b{b}.pdf")
+    plt.savefig(f"Figures/p_value_vs_attack_combined_k{k}_b{b}.pdf")
     plt.close()

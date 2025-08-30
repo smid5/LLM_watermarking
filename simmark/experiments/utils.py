@@ -29,6 +29,8 @@ COLORS = {
     "Unigram": "#d62728",  # red
     "SynthID": "#ff6ec7",  # pink
     "No Watermark": "#8c564b",  # brown
+    "SimSoftRed": "#00FFFF",
+    "SimSynthID": "#9467bd"  # purple
 }
 
 METHODS = {
@@ -37,7 +39,9 @@ METHODS = {
     "SoftRedList": "softred",
     "Unigram": "unigram",
     "SynthID": "synthid",
-    "No Watermark": "nomark"
+    "No Watermark": "nomark",
+    "SimSoftRed": "simsoftred",
+    "SimSynthID": "simsynthid"
 }
 
 def load_prompts(filename):
@@ -49,13 +53,28 @@ def load_prompts(filename):
 
 def load_llm_config(model_name):
     if model_name == "facebook/opt-125m":
+        device = "cuda" if torch.cuda.is_available() else "cpu"
         from transformers import AutoModelForCausalLM, AutoTokenizer
-        model = AutoModelForCausalLM.from_pretrained(model_name)
+        model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         return {
             "model": model,
             "tokenizer": tokenizer,
             "vocab_size": 50272
+        }
+    elif model_name == "meta-llama/Llama-3.2-3B":
+        hf_token = "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"
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        model = AutoModelForCausalLM.from_pretrained(model_name, 
+                                                     token=hf_token,
+                                                     torch_dtype="auto").to(device)
+        tokenizer = AutoTokenizer.from_pretrained(model_name, token=hf_token)
+        tokenizer.pad_token = tokenizer.eos_token
+        return {
+            "model": model,
+            "tokenizer": tokenizer,
+            "vocab_size": model.config.vocab_size
         }
     else:
         raise ValueError(f"Unknown model name: {model_name}")
@@ -66,12 +85,35 @@ def extract_watermark_config(generation_name, watermark_config):
     if method == "simmark":
         k = 4
         b = 4
+        device = "cuda" if torch.cuda.is_available() else "cpu"
         if '_' in generation_name:
             k = int(generation_name.split("_")[1])
             b = int(generation_name.split("_")[2])
         watermark_config['k'] = k
         watermark_config['b'] = b
-        watermark_config['transformer_model'] = SentenceTransformer('all-MiniLM-L6-v2')
+        watermark_config['transformer_model'] = SentenceTransformer('all-MiniLM-L6-v2').to(device)
+    elif method == "simsoftred":
+        n_gram = 2
+        b = 4
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        if '_' in generation_name:
+            n_gram = int(generation_name.split('_')[1])
+            b = int(generation_name.split("_")[2])
+        watermark_config['n_gram'] = n_gram
+        watermark_config['b'] = b
+        watermark_config['transformer_model'] = SentenceTransformer('all-MiniLM-L6-v2').to(device)
+    elif method == "simsynthid":
+        k = 4
+        b = 4
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        if '_' in generation_name:
+            k = int(generation_name.split('_')[1])
+            b = int(generation_name.split("_")[2])
+        watermark_config['depth'] = 30  # follow original paper
+        watermark_config['prior_tokens'] = 4
+        watermark_config['k'] = k
+        watermark_config['b'] = b
+        watermark_config['transformer_model'] = SentenceTransformer('all-MiniLM-L6-v2').to(device)
     elif method == "expmin":
         watermark_config['n'] = 150
         watermark_config['k'] = 8
@@ -93,6 +135,7 @@ def extract_watermark_config(generation_name, watermark_config):
     return watermark_config
 
 def generate(text_start, num_tokens, llm_config, generation_name, seed=42, top_p=0.9):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     # Extract generation configuration
     gen_config = {
         'vocab_size': llm_config['vocab_size'],
@@ -103,6 +146,7 @@ def generate(text_start, num_tokens, llm_config, generation_name, seed=42, top_p
     gen_config = extract_watermark_config(generation_name, gen_config)
     
     inputs = llm_config['tokenizer'](text_start, padding=True, truncation=True, return_tensors="pt")
+    inputs = {k: v.to(device) for k, v in inputs.items()}
     input_ids = inputs["input_ids"]
     attention_mask = inputs["attention_mask"]
 
@@ -309,9 +353,7 @@ def test_distortion(prompts, num_tokens, llm_config, generation_name, detection_
     cached_data = read_data(filename)
     distortion_data = read_data(distortion_filename)
     matches = ['prompt', 'seed', 'num_tokens']
-
     print(f"Calculating distortion for generator: {generation_name}, detector: {detection_name}, attack: {attack_name if attack_name else 'None'}")
-
     for prompt in prompts:
         # First check if we already have the perplexity cached
         try:
@@ -380,19 +422,23 @@ def test_distortion(prompts, num_tokens, llm_config, generation_name, detection_
     return perplexity_list
         
 def sentence_perplexity(prompt, generated_text, llm_config):
-    ids = llm_config['tokenizer'].encode(generated_text, return_tensors="pt").squeeze()
-    input_ids = llm_config['tokenizer'].encode(prompt, return_tensors="pt").squeeze()
+    model = llm_config['model']
+    tokenizer = llm_config['tokenizer']
+    device = next(model.parameters()).device
+
+    ids = llm_config['tokenizer'].encode(generated_text, return_tensors="pt").squeeze().to(device)
+    input_ids = llm_config['tokenizer'].encode(prompt, return_tensors="pt").squeeze().to(device)
     token_probs = []
 
     while len(input_ids) != len(ids):
         with torch.no_grad():
             input_text = llm_config['tokenizer'].decode(input_ids, skip_special_tokens=True)
-            input_tensor = llm_config['tokenizer'](input_text, return_tensors="pt")["input_ids"]
+            input_tensor = llm_config['tokenizer'](input_text, return_tensors="pt")["input_ids"].to(device)
             original_logits = llm_config['model'](input_tensor).logits
             original_probs = torch.softmax(original_logits[0,-1,:], dim=-1)
             token_probs.append(torch.log(original_probs[ids[len(input_ids)].item()]))
 
             input_ids = torch.cat((input_ids, ids[len(input_ids)].unsqueeze(0)))
 
-    perplexity = np.exp(-np.mean(token_probs)).item()
+    perplexity = np.exp(-torch.stack(token_probs).cpu().mean().item())
     return perplexity

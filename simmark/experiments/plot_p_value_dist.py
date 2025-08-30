@@ -29,7 +29,7 @@ def plot_p_value_dist(method_name, num_tokens, filename, k=4, b=4):
         prompts, num_tokens, llm_config, method, detection_name, "modify_1"
     )
 
-    plt.style.use(['science'])
+    plt.style.use(['science', 'no-latex'])
     plt.figure(figsize=(4, 3))
 
     # Labels and legend
@@ -37,10 +37,10 @@ def plot_p_value_dist(method_name, num_tokens, filename, k=4, b=4):
     for idx, key in enumerate(p_values):
         sns.kdeplot(p_values[key], label=key, log_scale=True, linewidth=2, color=cbcolors[idx], linestyle=linestyles[idx], cut=0)
     
-    plt.xlabel(r"$p$-value")
+    plt.xlabel("p-value")
     plt.ylabel("Frequency")
     plt.legend()
 
-    plt.savefig(f"figures/p_val_dist_{method}_{num_tokens}.pdf")
+    plt.savefig(f"Figures/p_val_dist_{method}_{num_tokens}.pdf")
 
     # Show the plot

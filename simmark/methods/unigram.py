@@ -9,7 +9,8 @@ def generate_green(vocab_size, seed):
 # A function that adjusts the logits so that tokens in the green list have a higher value compared to tokens in the red
 # Used within GreenPreferenceProcessor
 def select_next_token(logits, green_list, bias_factor = 2):
-    logits = logits + bias_factor * green_list
+    green_tensor = torch.tensor(green_list, dtype=logits.dtype, device=logits.device)
+    logits = logits + bias_factor * green_tensor
     probs = logits.softmax(dim=-1)
     next_token = top_p_sampling(probs, 0.9)
     return next_token

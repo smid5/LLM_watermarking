@@ -59,7 +59,7 @@ def generate_simmark_modification_experiment(filename, k=4, b=4, num_modificatio
         ))
 
     # Generate plot
-    plot_p_value_modifications(modifications, p_values, f"figures/simmark_p_value_vs_modifications_k{k}_b{b}.pdf")
+    plot_p_value_modifications(modifications, p_values, f"Figures/simmark_p_value_vs_modifications_k{k}_b{b}.pdf")
 
 if __name__ == '__main__':
     generate_simmark_modification_experiment("sentence_starters.txt")

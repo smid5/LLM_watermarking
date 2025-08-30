@@ -20,9 +20,9 @@ def top_p_sampling(probs, xi, top_p=0.9):
     # Create new probs and xi
     top_p_sorted_indices = sorted_indices[:cutoff_index+1]
     top_p_probs = probs[top_p_sorted_indices]
-    top_p_xi = xi[top_p_sorted_indices.numpy()]
+    top_p_xi = torch.tensor(xi[top_p_sorted_indices.cpu().numpy()], device=top_p_probs.device, dtype=top_p_probs.dtype)
 
-    next_token = torch.argmin(-np.log(top_p_xi) / top_p_probs)
+    next_token = torch.argmin(-top_p_xi.log() / top_p_probs)
 
     # Map back to original indices
     return sorted_indices[next_token].item()
@@ -100,7 +100,7 @@ def expmin_detect(text, config):
     n = config['n']
     vocab_size = config['vocab_size']
     xis = get_xis(config['seed'], vocab_size, n)
-    ids = config['tokenizer'].encode(text, return_tensors="pt").squeeze()
+    ids = config['tokenizer'].encode(text, return_tensors="pt").squeeze().to(config['model'].device)
     k = config['k']
 
     min_cost = float('inf')
