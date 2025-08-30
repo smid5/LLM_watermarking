@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import scienceplots
 import numpy as np
 from matplotlib.ticker import FuncFormatter, LogLocator
+import matplotlib as mpl
+mpl.rcParams["text.usetex"] = False
 
 from .utils import load_llm_config, test_watermark, load_prompts, COLORS
 
@@ -11,7 +13,7 @@ from .utils import load_llm_config, test_watermark, load_prompts, COLORS
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 def plot_sentence_length_p_values(sentence_lengths, p_values, filename):
-    plt.style.use(['science'])
+    plt.style.use(['science', 'no-latex'])
     plt.figure(figsize=(7.5, 4))
     MIN_PVAL = 1e-16
     
@@ -42,7 +44,7 @@ def plot_sentence_length_p_values(sentence_lengths, p_values, filename):
     plt.close()
 
 def generate_sentence_length_p_values(filename, k=4, b=4, length_variations=list(range(25, 105, 5)), seeds=[42]):
-    llm_config = load_llm_config('facebook/opt-125m')
+    llm_config = load_llm_config("meta-llama/Llama-3.2-3B")
     prompts = load_prompts(filename=filename)
     
     p_values = {"No Watermark": {}, "SimMark": {}, "SoftRedList": {}, "Unigram": {}, "ExpMin": {}, "SynthID": {}}
@@ -71,7 +73,7 @@ def generate_sentence_length_p_values(filename, k=4, b=4, length_variations=list
     for key in p_values:
         p_values[key] = [p_values[key][l] for l in sorted_lengths]
     
-    plot_sentence_length_p_values(sorted_lengths, p_values, f"figures/sentence_length_vs_p_values_k{k}_b{b}.pdf")
+    plot_sentence_length_p_values(sorted_lengths, p_values, f"Figures/sentence_length_vs_p_values_k{k}_b{b}.pdf")
 
 if __name__ == '__main__':
     generate_sentence_length_p_values("sentence_starters.txt")

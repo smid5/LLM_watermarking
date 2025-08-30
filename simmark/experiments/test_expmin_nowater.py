@@ -54,4 +54,4 @@ def generate_simmark_vs_expmin_p_values(filename, k=4, b=4, length_variations=li
     for key in p_values:
         p_values[key] = [p_values[key][l] for l in sorted_lengths]
     
-    plot_sentence_length_p_values(sorted_lengths, p_values, f"figures/sentence_length_vs_p_values_simmark_vs_expmin_k{k}_b{b}.pdf")
+    plot_sentence_length_p_values(sorted_lengths, p_values, f"Figures/sentence_length_vs_p_values_simmark_vs_expmin_k{k}_b{b}.pdf")

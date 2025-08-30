@@ -36,9 +36,9 @@ def top_p_sampling(probs, xi, top_p=0.9):
     # Create new probs and xi
     top_p_sorted_indices = sorted_indices[:cutoff_index+1]
     top_p_probs = probs[top_p_sorted_indices]
-    top_p_xi = xi[top_p_sorted_indices.numpy()]
+    top_p_xi = torch.tensor(xi[top_p_sorted_indices.cpu().numpy()], device=top_p_probs.device, dtype=top_p_probs.dtype)
 
-    next_token = torch.argmin(-np.log(top_p_xi) / top_p_probs)
+    next_token = torch.argmin(-top_p_xi.log() / top_p_probs)
 
     # Map back to original indices
     return sorted_indices[next_token].item()
@@ -60,7 +60,7 @@ class SimMarkProcessor(torch.nn.Module):
         for b in range(batch_size):
             # Step 1: Embed context using encoder into vector v in R^d
             with torch.no_grad():  
-                input_text = self.tokenizer.decode(input_ids[b])
+                input_text = self.tokenizer.decode(input_ids[b,-8:], skip_special_tokens=True)
             input_vector = self.transformer_model.encode(input_text)
 
             # Change: Use sentence embedding vector on all prior tokens (not just self.prior_tokens of them)
@@ -84,24 +84,33 @@ class SimMarkProcessor(torch.nn.Module):
 from scipy.stats import gamma
 
 def simmark_detect(text, config):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     ids = config['tokenizer'].encode(text, return_tensors="pt").squeeze()
     transformer_model = config['transformer_model']
+    seen_ntuples = set()
 
     avg_cost = 0
+    num_uniques = 0
 
     for i in range(1, len(ids)):
-        input_text = config['tokenizer'].decode(ids[:i])
-        input_vector = transformer_model.encode(input_text)
+        ngram_tokens = tuple(ids[max(0, i-8):i+1].tolist())
+        if ngram_tokens in seen_ntuples:
+            continue
+        seen_ntuples.add(ngram_tokens)
+        num_uniques += 1
+        input_text = config['tokenizer'].decode(ids[max(0,i-8):i], skip_special_tokens=True)
+        input_vector = transformer_model.encode(input_text, device=device)
         min_cost = float('inf')
         for hash_idx in range(config['k']):
             xi = simhash(input_vector, hash_idx, config['vocab_size'], config['seed'], config['k'], config['b'])
             cost = -np.log(xi[ids[i]])
             min_cost = min(min_cost, cost)
 
-        avg_cost += min_cost / (len(ids) - 1)
-
-    shape = len(ids) - 1
-    rate = (len(ids) - 1) * config['k']
+        avg_cost += min_cost
+    
+    avg_cost /= num_uniques
+    shape = num_uniques
+    rate = (num_uniques) * config['k']
     p_value = gamma.cdf(avg_cost, shape, scale=1/rate)
 
     print(f"Detection cost: {avg_cost}, p-value: {p_value}")

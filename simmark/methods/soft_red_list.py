@@ -12,7 +12,8 @@ def generate_green(vocab_size, seed, input_ids):
 def adjust_logits(logits, vocab_size, seed, input_ids, bias_factor = 2):
     for i in range(len(input_ids)):
         green_list = generate_green(vocab_size, seed, input_ids[i,:])
-        logits[i] = logits[i] + bias_factor * torch.tensor(green_list)
+        green_tensor = torch.tensor(green_list, dtype=logits.dtype, device=logits.device)
+        logits[i] = logits[i] + bias_factor * green_tensor
         probs = logits[i].softmax(dim=-1)
         next_token = top_p_sampling(probs, 0.9)
         logits[i,:] = 1e-5
@@ -63,7 +64,7 @@ def softred_detect(text, detection_config):
     n_gram_size = detection_config['n_gram']
 
     num_green = 0
-    ids = detection_config['tokenizer'].encode(text, return_tensors="pt").squeeze()
+    ids = detection_config['tokenizer'].encode(text, return_tensors="pt").squeeze().to(detection_config['model'].device)
     # print(F"ids: {ids}")
     for i in range(n_gram_size-1, len(ids)):
         green = generate_green(vocab_size, seed, ids[i-n_gram_size+1:i])

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import hashlib
 
 
-def get_gvalues(prior_ids, seed, vocab_size, depth):
+def get_gvalues(prior_ids, seed, vocab_size, depth, device):
     g_values = np.empty((depth, vocab_size))
     for i in range(depth):
         g_seed = int(hashlib.sha256(
@@ -15,14 +15,14 @@ def get_gvalues(prior_ids, seed, vocab_size, depth):
 
         rng = np.random.default_rng(g_seed)
         g_values[i,:] = rng.integers(low=0, high=2, size=vocab_size)
-    g_tensor = torch.from_numpy(g_values) 
+    g_tensor = torch.from_numpy(g_values).to(device)
     return g_tensor
 
 def update_scores(logits, prior_ids, seed, vocab_size, depth):
     batch_size = prior_ids.shape[0]
-    g_values = torch.zeros(batch_size, depth, vocab_size)
+    g_values = torch.zeros(batch_size, depth, vocab_size, device=logits.device)
     for b in range(batch_size):
-        g_values[b,:,:] = get_gvalues(prior_ids[b], seed, vocab_size, depth)
+        g_values[b,:,:] = get_gvalues(prior_ids[b], seed, vocab_size, depth, device=logits.device)
 
     probs = logits.softmax(dim=-1)
 
@@ -80,7 +80,8 @@ class SynthIDProcessor(torch.nn.Module):
 from scipy.stats import binom
 
 def synthid_detect(text, config):
-    ids = config['tokenizer'].encode(text, return_tensors="pt").squeeze()
+    device = config['model'].device
+    ids = config['tokenizer'].encode(text, return_tensors="pt").squeeze().to(device)
 
     # Assuming 'prior_tokens' is defined in 'config' similar to SimMark
     prior_tokens = config['prior_tokens']
@@ -93,7 +94,7 @@ def synthid_detect(text, config):
         # Extract the embeddings for the prior tokens window
         prior_ids = ids[i-prior_tokens:i].sum() 
         
-        g_values = get_gvalues(prior_ids, config['seed'], config['vocab_size'], config['depth'])
+        g_values = get_gvalues(prior_ids, config['seed'], config['vocab_size'], config['depth'], device)
         cost += g_values[:,ids[i]].sum().item()  # Get the cost for the actual token id
     # max_cost = max(max_cost, cost)
 

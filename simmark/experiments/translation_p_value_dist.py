@@ -64,7 +64,7 @@ def translation_p_value_violin(filename, k=4, b=4, num_tokens=100):
     # plt.title(rf"Distribution of p-values for all methods")
     plt.legend(title="Category", loc="upper left", bbox_to_anchor=(1, 1), fontsize=12)
     plt.grid(True, which="both", linestyle="--", linewidth=0.5)
-    plt.savefig(f"figures/translation_p_val_dist_{k}_{b}_{num_tokens}.pdf")
+    plt.savefig(f"Figures/translation_p_val_dist_{k}_{b}_{num_tokens}.pdf")
 
 def plot_p_value_dist_translation(method_name, num_tokens, filename, k=4, b=4):
     llm_config = load_llm_config('facebook/opt-125m')
@@ -91,7 +91,7 @@ def plot_p_value_dist_translation(method_name, num_tokens, filename, k=4, b=4):
         prompts, num_tokens, llm_config, method, detection_name, "translate"
     )
 
-    plt.style.use(['science'])
+    plt.style.use(['science', 'no-latex'])
     plt.figure(figsize=(4, 3))
 
     # Labels and legend
@@ -111,8 +111,8 @@ def plot_p_value_dist_translation(method_name, num_tokens, filename, k=4, b=4):
                         linestyle=linestyles[idx],
                         cut=0)
     
-    plt.xlabel(r"$p$-value")
+    plt.xlabel("p-value")
     plt.ylabel("Frequency")
     plt.legend()
 
-    plt.savefig(f"figures/translation_p_val_dist_{method}_{num_tokens}.pdf")
+    plt.savefig(f"Figures/translation_p_val_dist_{method}_{num_tokens}.pdf")

@@ -9,7 +9,7 @@ from scipy.stats import wasserstein_distance
 from .utils import load_llm_config, test_watermark, load_prompts, test_distortion, detect, read_data, COLORS
 
 def get_robustness(method, attack, num_tokens, filename, seeds):
-    llm_config = load_llm_config('facebook/opt-125m')
+    llm_config = load_llm_config("meta-llama/Llama-3.2-3B")
 
     prompts = load_prompts(filename=filename)
 
@@ -31,7 +31,7 @@ def get_robustness(method, attack, num_tokens, filename, seeds):
     return true_positive_rate
 
 def get_sensitivity(method, num_tokens, filename, seeds):
-    llm_config = load_llm_config('facebook/opt-125m')
+    llm_config = load_llm_config("meta-llama/Llama-3.2-3B")
 
     prompts = load_prompts(filename=filename)
 
@@ -53,7 +53,7 @@ def get_sensitivity(method, num_tokens, filename, seeds):
     return negative_rate
 
 def get_distortion(method, num_tokens, filename, seeds):
-    llm_config = load_llm_config('facebook/opt-125m')
+    llm_config = load_llm_config("meta-llama/Llama-3.2-3B")
 
     prompts = load_prompts(filename=filename)
 
@@ -77,67 +77,66 @@ def get_distortion(method, num_tokens, filename, seeds):
 
     return w_dist
 
-def get_unforgeability(method, num_tokens, filename, num_inject=6, num_unwatermarked=6, folder="data/", seeds=[42]):
-    llm_config = load_llm_config('facebook/opt-125m')
+def get_unforgeability(method, num_tokens, filename, num_inject=6, num_unwatermarked=6, folder="data/", seed=42):
+    llm_config = load_llm_config("meta-llama/Llama-3.2-3B")
     prompts = load_prompts(filename=filename)
 
     output_file = folder + f"{method}_forgeability.txt"
     detected_p_values = []
 
-    for seed in seeds:
-        p_values_watermarked = test_watermark(
-            prompts, num_tokens, llm_config, generation_name=method, detection_name=method, seed=seed
-        )
-        # median_i = argmedian(p_values_watermarked)
-        cache_file_watermarked = folder + f"{method}_{method}_.txt"
-        cached_data_watermarked = read_data(cache_file_watermarked)
+    p_values_watermarked = test_watermark(
+        prompts, num_tokens, llm_config, generation_name=method, detection_name=method, seed=seed
+    )
+    # median_i = argmedian(p_values_watermarked)
+    cache_file_watermarked = folder + f"{method}_{method}_.txt"
+    cached_data_watermarked = read_data(cache_file_watermarked)
 
-        p_values_unwatermarked = test_watermark(
-        prompts, num_tokens, llm_config, generation_name="nomark", detection_name=method, seed=seed
-        )
-        cache_file_unwatermarked = folder + f"nomark_{method}_.txt"
-        cached_data_unwatermarked = read_data(cache_file_unwatermarked)
+    p_values_unwatermarked = test_watermark(
+    prompts, num_tokens, llm_config, generation_name="nomark", detection_name=method, seed=seed
+    )
+    cache_file_unwatermarked = folder + f"nomark_{method}_.txt"
+    cached_data_unwatermarked = read_data(cache_file_unwatermarked)
 
-        # median_text = extract_generated_text(prompts[median_i], cached_data_watermarked, num_tokens, seed)
-        # median_text_list = median_text.split()
-        # median_text_length = len(median_text_list)
-        watermarked_text_lists = []
-        for prompt in prompts:
-            watermarked_text = extract_generated_text(prompt, cached_data_watermarked, num_tokens, seed)
-            watermarked_text_list = watermarked_text.split()
-            watermarked_text_lists.append(watermarked_text_list)
+    # median_text = extract_generated_text(prompts[median_i], cached_data_watermarked, num_tokens, seed)
+    # median_text_list = median_text.split()
+    # median_text_length = len(median_text_list)
+    watermarked_text_lists = []
+    for prompt in prompts:
+        watermarked_text = extract_generated_text(prompt, cached_data_watermarked, num_tokens, seed)
+        watermarked_text_list = watermarked_text.split()
+        watermarked_text_lists.append(watermarked_text_list)
 
-        for prompt in prompts:
-            generated_text = extract_generated_text(prompt, cached_data_unwatermarked, num_tokens, seed)
-            generated_text_list = generated_text.split()
-            num_words = len(generated_text_list)
-            
-            for watermarked_text_list in watermarked_text_lists:
-                watermarked_text_length = len(watermarked_text_list)
-                w_idx = 0
-                spoofed = generated_text_list[:num_unwatermarked]
-                i = num_unwatermarked
+    for prompt in prompts:
+        generated_text = extract_generated_text(prompt, cached_data_unwatermarked, num_tokens, seed)
+        generated_text_list = generated_text.split()
+        num_words = len(generated_text_list)
+        
+        for watermarked_text_list in watermarked_text_lists:
+            watermarked_text_length = len(watermarked_text_list)
+            w_idx = 0
+            spoofed = generated_text_list[:num_unwatermarked]
+            i = num_unwatermarked
 
-                while i < num_words:
-                    if w_idx < watermarked_text_length:
-                        spoofed.extend(watermarked_text_list[w_idx:w_idx+num_inject])
-                        w_idx += num_inject
-                    
-                    spoofed.extend(generated_text_list[i:i+num_unwatermarked])
-                    i += num_unwatermarked
+            while i < num_words:
+                if w_idx < watermarked_text_length:
+                    spoofed.extend(watermarked_text_list[w_idx:w_idx+num_inject])
+                    w_idx += num_inject
+                
+                spoofed.extend(generated_text_list[i:i+num_unwatermarked])
+                i += num_unwatermarked
 
-                spoofed_text = ' '.join(spoofed)
-                detected_p_value = detect(spoofed_text, llm_config, method)
-                detected_p_values.append(detected_p_value)
-                output = {
-                    'prompt': prompt,
-                    'generated_text': spoofed_text,
-                    'p_value': detected_p_value,
-                    'seed' : seed,
-                    'num_tokens' : num_tokens,
-                }
-                with open(output_file, 'a') as f:
-                    f.write(str(output) + '\n')
+            spoofed_text = ' '.join(spoofed)
+            detected_p_value = detect(spoofed_text, llm_config, method)
+            detected_p_values.append(detected_p_value)
+            output = {
+                'prompt': prompt,
+                'generated_text': spoofed_text,
+                'p_value': detected_p_value,
+                'seed' : seed,
+                'num_tokens' : num_tokens,
+            }
+            with open(output_file, 'a') as f:
+                f.write(str(output) + '\n')
 
     detected_p_values = np.array(detected_p_values)
     threshold = 1e-2
@@ -251,11 +250,12 @@ def normalize_scores(techniques, criteria, log=False, inverse=False):
             normalized_scores = [(max_score - score) / range_score for score in scores]
     for technique, normalized_score in zip(techniques.values(), normalized_scores):
         technique[criteria] = normalized_score
+        print(f"Normalized {criteria} for technique: {normalized_score}")
     return techniques
 
 def generate_radar_plot(num_tokens, filename, k=4, b=4, seeds=[42]):
-    method_names = ["SimMark", "SoftRedList", "Unigram", "ExpMin", "SynthID"]
-    methods = [f"simmark_{k}_{b}", "softred", "unigram", "expmin", "synthid"]
+    method_names = ["SimMark", "SimSynthID", "SoftRedList", "Unigram", "ExpMin", "SynthID"]
+    methods = [f"simmark_{k}_{b}", "simsynthid", "softred", "unigram", "expmin", "synthid"]
     techniques = {}
 
     for method_name, method in zip(method_names, methods):
@@ -263,7 +263,7 @@ def generate_radar_plot(num_tokens, filename, k=4, b=4, seeds=[42]):
         robustness_duplicate = get_robustness(method, "duplicate_20", num_tokens, filename, seeds)
         sensitivity = get_sensitivity(method, num_tokens, filename, seeds)
         distortion_freeness = get_distortion(method, num_tokens, filename, seeds)
-        unforgeability = get_unforgeability(method, num_tokens, filename, seeds)
+        unforgeability = get_unforgeability(method, num_tokens, filename)
         techniques[method_name] = {
             "Robustness to \nTranslation": robustness_translate, 
             "Robustness to \nRelated Word Insertion": robustness_duplicate,
@@ -276,7 +276,7 @@ def generate_radar_plot(num_tokens, filename, k=4, b=4, seeds=[42]):
     labels = list(techniques[method_names[0]].keys())
     num_vars = len(labels)
 
-    plt.style.use(['science'])
+    plt.style.use(['science', 'no-latex'])
 
     # Compute angles for radar chart
     angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
