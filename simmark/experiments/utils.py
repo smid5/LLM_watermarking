@@ -29,8 +29,12 @@ COLORS = {
     "Unigram": "#d62728",  # red
     "SynthID": "#ff6ec7",  # pink
     "No Watermark": "#8c564b",  # brown
-    "SimSoftRed": "#00FFFF",
-    "SimSynthID": "#9467bd"  # purple
+    "SimSoftRed": "#00FFFF", # cyan
+    "SimSynthID": "#9467bd",  # purple
+    "ExpMin (standard)": "#ff7f0e",  # orange
+    "ExpMin (Simhash)": "#1f77b4",  # blue
+    "SynthID (standard)": "#ff6ec7",  # pink
+    "SynthID (Simhash)": "#d62728",  # red
 }
 
 METHODS = {
@@ -80,18 +84,22 @@ def load_llm_config(model_name):
         raise ValueError(f"Unknown model name: {model_name}")
 
 def extract_watermark_config(generation_name, watermark_config):
-    method = generation_name.split("_")[0]
+    parts = generation_name.split("_")
+    method = parts[0]
     watermark_config['method'] = method
-    if method == "simmark":
+    isSimHash = parts[1] == "simhash" if len(parts) > 1 else False
+    watermark_config['isSimHash'] = isSimHash
+    if method == "expmin":
         k = 4
         b = 4
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        if '_' in generation_name:
-            k = int(generation_name.split("_")[1])
-            b = int(generation_name.split("_")[2])
+        if len(parts)>3:
+            k = int(parts[2])
+            b = int(parts[3])
         watermark_config['k'] = k
         watermark_config['b'] = b
         watermark_config['transformer_model'] = SentenceTransformer('all-MiniLM-L6-v2').to(device)
+        watermark_config['prior_tokens'] = 8
     elif method == "simsoftred":
         n_gram = 2
         b = 4
@@ -102,32 +110,23 @@ def extract_watermark_config(generation_name, watermark_config):
         watermark_config['n_gram'] = n_gram
         watermark_config['b'] = b
         watermark_config['transformer_model'] = SentenceTransformer('all-MiniLM-L6-v2').to(device)
-    elif method == "simsynthid":
+    elif method == "synthid":
         k = 4
         b = 4
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        if '_' in generation_name:
-            k = int(generation_name.split('_')[1])
-            b = int(generation_name.split("_")[2])
+        if len(parts)>3:
+            k = int(parts[2])
+            b = int(parts[3])
         watermark_config['depth'] = 30  # follow original paper
         watermark_config['prior_tokens'] = 4
         watermark_config['k'] = k
         watermark_config['b'] = b
         watermark_config['transformer_model'] = SentenceTransformer('all-MiniLM-L6-v2').to(device)
-    elif method == "expmin":
-        watermark_config['n'] = 150
-        watermark_config['k'] = 8
     elif method == "softred": 
         n_gram = 2
         if '_' in generation_name:
             n_gram = int(generation_name.split('_')[1])
         watermark_config['n_gram'] = n_gram
-    elif method == "synthid":
-        depth = 30 # follow original paper
-        if '_' in generation_name:
-            depth = int(generation_name.split('_')[1])
-        watermark_config["prior_tokens"] = 4 # follow original paper
-        watermark_config["depth"] = depth
     elif method == "unigram": pass
     elif method == "nomark": pass
     else:

@@ -254,8 +254,8 @@ def normalize_scores(techniques, criteria, log=False, inverse=False):
     return techniques
 
 def generate_radar_plot(num_tokens, filename, k=4, b=4, seeds=[42]):
-    method_names = ["SimMark", "SimSynthID", "SoftRedList", "Unigram", "ExpMin", "SynthID"]
-    methods = [f"simmark_{k}_{b}", "simsynthid", "softred", "unigram", "expmin", "synthid"]
+    method_names = ["ExpMin (standard)", "ExpMin (Simhash)", "SynthID (standard)", "SynthID (Simhash)"]
+    methods = [f"expmin_standard_{k}_{b}", f"expmin_simhash_{k}_{b}", f"synthid_standard_{k}_{b}", f"synthid_simhash_{k}_{b}"]
     techniques = {}
 
     for method_name, method in zip(method_names, methods):
@@ -268,7 +268,7 @@ def generate_radar_plot(num_tokens, filename, k=4, b=4, seeds=[42]):
             "Robustness to \nTranslation": robustness_translate, 
             "Robustness to \nRelated Word Insertion": robustness_duplicate,
             "Sensitivity to Unrelated \nToken Substitution": sensitivity,
-            "Distortion-freeness": distortion_freeness, 
+            "Distortion-freeness": distortion_freeness,
             "Sensitivity to Forgery": unforgeability
         }
     techniques = normalize_scores(techniques, "Distortion-freeness", log=False, inverse=True)

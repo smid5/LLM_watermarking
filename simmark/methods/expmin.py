@@ -2,11 +2,9 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import hashlib
+from sentence_transformers import SentenceTransformer
+from .seeding import simhash_seed, normal_seed
 
-def get_xis(seed, vocab_size, n):
-    rng = np.random.default_rng(seed)
-    xis = rng.random((n, vocab_size))
-    return xis
 
 def top_p_sampling(probs, xi, top_p=0.9):
     sorted_probs, sorted_indices = torch.sort(probs, descending=True)
@@ -30,94 +28,70 @@ def top_p_sampling(probs, xi, top_p=0.9):
 class ExpMinProcessor(torch.nn.Module):
     def __init__(self, generation_config):
         super().__init__()
+        self.model = generation_config['model']
+        self.embedding_dimension = self.model.config.hidden_size
         self.vocab_size = generation_config['vocab_size']
+        self.k = generation_config['k']
+        self.b = generation_config['b']
         self.seed = generation_config['seed']
-        self.n = generation_config['n']
-        self.xis = get_xis(self.seed, self.vocab_size, self.n)
-        self.i = 1
-        rng = np.random.default_rng()
-        self.tau = rng.integers(self.n)
+        self.transformer_model = generation_config['transformer_model']
+        self.tokenizer = generation_config['tokenizer']
+        self.prior_tokens = generation_config['prior_tokens']
+        self.isSimHash = generation_config['isSimHash']
 
     def forward(self, input_ids, logits):
-        xi = self.xis[(self.i+self.tau)%self.n,:]
         batch_size = input_ids.shape[0]
-        for b in range(batch_size):
-            probs = logits[b].softmax(dim=-1)         
+        for batch in range(batch_size):
+            # Sample hash_idx
+            rng = np.random.default_rng()
+            hash_idx = rng.integers(self.k)
+
+            if self.isSimHash:
+                seed = simhash_seed(input_ids[batch], self.prior_tokens, self.tokenizer, self.transformer_model, hash_idx, self.seed, self.k, self.b)
+            else:
+                seed = normal_seed(input_ids[batch], self.prior_tokens, hash_idx, self.seed)
+
+            # Compute xi using input_vector, hash_idx, and seed
+            # Use simhash_seed to sample xi ~ Unif[(0,1)^vocab size]
+            rng = np.random.default_rng(seed)
+            xi = rng.random(self.vocab_size)
+    
+            probs = logits[batch].softmax(dim=-1)         
             next_token = top_p_sampling(probs, xi, 0.9)
             
             # Modify logits to enforce next token selection
-            logits[b, :] = -1e5
-            logits[b, next_token] = 1e5
-
-        self.i += 1
+            logits[batch, :] = -1e5
+            logits[batch, next_token] = 1e5
         
         return logits  
 
-from scipy.stats import gamma, rv_continuous
-
-# Custom distribution
-class MinGammaDist(rv_continuous):
-    def __init__(self, alpha, scale, n):
-        super().__init__()
-        self.alpha = alpha
-        self.n = n
-        self.scale = scale
-
-    def _pdf(self, x):
-        f_x = gamma.pdf(x, a=self.alpha, scale=self.scale)
-        F_x = gamma.cdf(x, a=self.alpha, scale=self.scale)
-        return self.n * (1 - F_x)**(self.n - 1) * f_x
-
-    def _cdf(self, x):
-        F_x = gamma.cdf(x, a=self.alpha, scale=self.scale)
-        return 1 - (1 - F_x)**self.n
-
-
-# def expmin_detect(text, config):
-#     avg_cost = 0
-#     n = config['n']
-#     vocab_size = config['vocab_size']
-#     xis = get_xis(config['seed'], vocab_size, n)
-#     ids = config['tokenizer'].encode(text, return_tensors="pt").squeeze()
-
-#     min_cost = float('inf')
-#     for offset in range(n):
-#         cost = 0
-#         for i in range(len(ids)):
-#             cost += -np.log(xis[(i+offset)%n,ids[i].item()])
-#         min_cost = min(min_cost, cost)
-
-#     shape = len(ids)
-#     rate = 1
-#     num_rvs = n
-#     min_gamma = MinGammaDist(alpha=shape, scale=1/rate, n=num_rvs)
-#     p_value = min_gamma.cdf(min_cost)
-#     print(f"Detection cost: {min_cost}, p-value: {p_value}")
-        
-#     return p_value
+from scipy.stats import expon
 
 def expmin_detect(text, config):
-    n = config['n']
-    vocab_size = config['vocab_size']
-    xis = get_xis(config['seed'], vocab_size, n)
-    ids = config['tokenizer'].encode(text, return_tensors="pt").squeeze().to(config['model'].device)
-    k = config['k']
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    ids = config['tokenizer'].encode(text, return_tensors="pt").squeeze()
+    transformer_model = config['transformer_model']
+    prior_tokens = config['prior_tokens']
+    isSimHash = config['isSimHash']
 
-    min_cost = float('inf')
-    for i in range(len(ids)-k+1):
-        min_cost_i = float('inf')
-        for offset in range(n):
-            cost = 0
-            for j in range(k):
-                cost += -np.log(xis[(i+offset+j)%n,ids[i+j].item()])
-            min_cost_i = min(min_cost_i, cost)
-        min_cost = min(min_cost, min_cost_i)
+    avg_pvalue = 0.0
 
-    shape = k
-    rate = 1
-    num_rvs = n * (len(ids)-k+1)
-    min_gamma = MinGammaDist(alpha=shape, scale=1/rate, n=num_rvs)
-    p_value = min_gamma.cdf(min_cost)
-    print(f"Detection cost: {min_cost}, p-value: {p_value}")
-        
-    return p_value
+    for i in range(1, len(ids)):
+        min_cost = float('inf')
+        for hash_idx in range(config['k']):
+            if isSimHash:
+                seed = simhash_seed(ids[:i], prior_tokens, config['tokenizer'], transformer_model, hash_idx, config['seed'], config['k'], config['b'])
+            else:
+                seed = normal_seed(ids[:i], prior_tokens, hash_idx, config['seed'])
+            rng = np.random.default_rng(seed)
+            xi = rng.random(config['vocab_size'])
+            cost = -np.log(xi[ids[i]])
+            min_cost = min(min_cost, cost)
+        p_value = expon.cdf(min_cost, scale=1/config['k'])
+
+        avg_pvalue += p_value
+    avg_pvalue /= (len(ids) - 1)
+
+    print(f"p-value: {avg_pvalue}")
+
+    return avg_pvalue
