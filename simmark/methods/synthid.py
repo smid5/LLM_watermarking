@@ -2,41 +2,21 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import hashlib
+from .seeding import simhash_seed, normal_seed
 
-
-def get_gvalues(prior_ids, seed, vocab_size, depth, device):
+def get_gvalues(input_ids, hash_idx, prior_tokens, vocab_size, seed, k, b, depth, device, isSimHash, tokenizer, transformer_model):
     g_values = np.empty((depth, vocab_size))
     for i in range(depth):
-        g_seed = int(hashlib.sha256(
-            bytes(str(seed), 'utf-8') + 
-            bytes(str(prior_ids), 'utf-8') +
-            bytes(str(i), 'utf-8')
-        ).hexdigest(), 16) % (2**32 - 1)  # Ensure valid seed range
-
-        rng = np.random.default_rng(g_seed)
+        if isSimHash:
+            seed = simhash_seed(input_ids, prior_tokens, tokenizer, transformer_model, hash_idx+i, seed, k, b)
+        else:
+            seed = normal_seed(input_ids, prior_tokens, hash_idx+i, seed)
+        # Use simhash_seed to sample xi ~ Unif[(0,1)^vocab size]
+        rng = np.random.default_rng(seed)
         g_values[i,:] = rng.integers(low=0, high=2, size=vocab_size)
     g_tensor = torch.from_numpy(g_values).to(device)
+
     return g_tensor
-
-def update_scores(logits, prior_ids, seed, vocab_size, depth):
-    batch_size = prior_ids.shape[0]
-    g_values = torch.zeros(batch_size, depth, vocab_size, device=logits.device)
-    for b in range(batch_size):
-        g_values[b,:,:] = get_gvalues(prior_ids[b], seed, vocab_size, depth, device=logits.device)
-
-    probs = logits.softmax(dim=-1)
-
-    for i in range(depth):
-        g_values_at_depth = g_values[:,i,:]
-        g_mass_at_depth = (g_values_at_depth * probs).sum(dim=-1, keepdims=True)
-        probs = probs * (1 + g_values_at_depth - g_mass_at_depth)
-
-    for b in range(batch_size):
-        next_token = top_p_sampling(probs[b], 0.9)
-        logits[b,:] = 1e-5
-        logits[b,next_token] = 1e5
-
-    return logits
 
 def top_p_sampling(probs, top_p=0.9):
     sorted_probs, sorted_indices = torch.sort(probs, descending=True)
@@ -65,46 +45,80 @@ class SynthIDProcessor(torch.nn.Module):
         self.vocab_size = generation_config['vocab_size']
         self.seed = generation_config['seed']
         self.prior_tokens = generation_config['prior_tokens']
-        # self.k = generation_config['k']  
         self.depth = generation_config['depth']
+        self.model = generation_config['model']
+        self.embedding_dimension = self.model.config.hidden_size
+        self.k = generation_config['k']
+        self.b = generation_config['b']
+        self.transformer_model = generation_config['transformer_model']
+        self.tokenizer = generation_config['tokenizer']
+        self.isSimHash = generation_config['isSimHash']
 
     def forward(self, input_ids, logits):
-        prior_ids = input_ids[:, -self.prior_tokens:].sum(dim=-1)
-        # Sample hash_idx
-        # hash_idx = np.random.randint(0, self.k)
-         
-        scores = update_scores(logits, prior_ids, self.seed, self.vocab_size, self.depth)
-        
-        return scores
+        batch_size = input_ids.shape[0]
+        g_values = torch.zeros(batch_size, self.depth, self.vocab_size, device=logits.device)
+        for batch in range(batch_size):
+            # Sample hash_idx
+            rng = np.random.default_rng()
+            hash_idx = rng.integers(self.k)
 
-from scipy.stats import binom
+            # Compute xi using input_vector, hash_idx, and seed
+            g_values[batch,:,:] = get_gvalues(input_ids[batch], hash_idx, self.prior_tokens, self.vocab_size, self.seed, self.k, self.b, self.depth, logits.device, self.isSimHash, self.tokenizer, self.transformer_model)
+    
+        probs = logits.softmax(dim=-1)
+
+        for i in range(self.depth):
+            g_values_at_depth = g_values[:,i,:]
+            g_mass_at_depth = (g_values_at_depth * probs).sum(dim=-1, keepdims=True)
+            probs = probs * (1 + g_values_at_depth - g_mass_at_depth)
+
+        for batch in range(batch_size):
+            next_token = top_p_sampling(probs[batch], 0.9)
+            logits[batch,:] = 1e-5
+            logits[batch,next_token] = 1e5
+
+        return logits
+
+from scipy.stats import rv_discrete, binom
+from math import comb
+
+def custom_distribution(n, k):
+    """
+    Custom distribution for Y = max(X_1, ..., X_k) and X_i ~ Binomial(n, 0.5)"""
+    # CDF of X
+    x = np.arange(n+1)
+    F = binom.cdf(x, n, 0.5)
+
+    # pmf of Y = max(X_1,...,X_k)
+    pY = np.empty(n+1)
+    pY[0] = F[0]**k
+    pY[1:] = F[1:]**k - F[:-1]**k
+    pY = np.clip(pY, 0.0, None)
+    pY /= pY.sum()
+
+    support = np.arange(len(pY))
+    return rv_discrete(name="custom_max_dist", values=(support, pY))
 
 def synthid_detect(text, config):
     device = config['model'].device
     ids = config['tokenizer'].encode(text, return_tensors="pt").squeeze().to(device)
+    transformer_model = config['transformer_model']
+    isSimHash = config['isSimHash']
 
-    # Assuming 'prior_tokens' is defined in 'config' similar to SimMark
-    prior_tokens = config['prior_tokens']
-    # max_cost = float('-inf')
+    avg_pvalue = 0
 
-    # Compute the minimum cost for each hash_idx within the window
-    # for hash_idx in range(config['k']):
-    cost = 0
-    for i in range(prior_tokens, len(ids)):
-        # Extract the embeddings for the prior tokens window
-        prior_ids = ids[i-prior_tokens:i].sum() 
-        
-        g_values = get_gvalues(prior_ids, config['seed'], config['vocab_size'], config['depth'], device)
-        cost += g_values[:,ids[i]].sum().item()  # Get the cost for the actual token id
-    # max_cost = max(max_cost, cost)
+    for i in range(1, len(ids)):
+        max_cost = float('-inf')
+        for hash_idx in range(config['k']):
+            g_values = get_gvalues(ids[:i], hash_idx, config['prior_tokens'], config['vocab_size'], config['seed'], config['k'], config['b'], config['depth'], device, isSimHash, config['tokenizer'], transformer_model)
+            cost = g_values[:,ids[i]].sum().item()
+            max_cost = max(max_cost, cost)
+        custom_dist = custom_distribution(config['depth'], config['k'])
+        p_value = 1 - custom_dist.cdf(max_cost)
 
-    # distribution parameters
-    shape = (len(ids) - prior_tokens) * len(g_values)
+        avg_pvalue += p_value
+    avg_pvalue /= (len(ids) - 1)
 
-    score = cost / shape
+    print(f"p-value: {avg_pvalue}")
 
-    # Probability we would expect max_cost or more from shape 1/2 trials
-    p_value = 1 - binom.cdf(cost, shape, 0.5)
-
-    print(f"Detection cost: {score}, p-value: {p_value}")
-    return p_value
+    return avg_pvalue
