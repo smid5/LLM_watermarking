@@ -1,5 +1,5 @@
 import numpy as np
-from .utils import load_llm_config, load_prompts, test_watermark, METHODS
+from .utils import load_llm_config, load_prompts, test_watermark, METHODS, KEYS
 
 def compute_tpr(pvals_unwm, pvals_wm, fpr):
     # Step 1: Find threshold tau from unwatermarked p-values
@@ -12,11 +12,11 @@ def compute_tpr(pvals_unwm, pvals_wm, fpr):
     tpr = np.mean(pvals_wm <= tau)
     return tpr, tau
 
-def get_tprs(method_name, fprs, num_tokens, filename, k=4, b=4, seeds=[42]):
-    llm_config = load_llm_config('facebook/opt-125m')
+def get_tprs(method_name, key_name, fprs, num_tokens, filename, attack_name="", k=4, b=4, seeds=[42], model_name='meta-llama/Meta-Llama-3-8B'):
+    llm_config = load_llm_config(model_name)
     prompts = load_prompts(filename=filename)
 
-    method = f"simmark_{k}_{b}" if method_name == "SimMark" else METHODS[method_name]
+    method = f"{METHODS[method_name]}_{KEYS[key_name]}_{k}_{b}"
     detection_name = method
 
     # Generate without watermark
@@ -24,9 +24,9 @@ def get_tprs(method_name, fprs, num_tokens, filename, k=4, b=4, seeds=[42]):
                   for seed in seeds])
 
     # Generate with watermark
-    pvals_wm = np.concatenate([test_watermark(prompts, num_tokens, llm_config, method, detection_name, seed=seed)
+    pvals_wm = np.concatenate([test_watermark(prompts, num_tokens, llm_config, method, detection_name, attack_name=attack_name, seed=seed)
                 for seed in seeds])
 
     for fpr in fprs:
         tpr, tau = compute_tpr(pvals_unwm, pvals_wm, fpr)
-        print(f"Method: {method_name}, FPR: {fpr}, TPR: {tpr}, Tau: {tau}")
+        print(f"Method: {method_name}, Key: {key_name}, FPR: {fpr}, TPR: {tpr}, Tau: {tau}")

@@ -48,6 +48,28 @@ def measure_distortion(original, modified):
     edit_ratio = Levenshtein.distance(original, modified) / max(len(original), len(modified), 1)
     return round(cosine_sim, 4), round(edit_ratio, 4)
 
+_translation_models = {}
+
+def get_translation_models(language):
+    if language in _translation_models:
+        return _translation_models[language]
+
+    if language == "french":
+        en_ne = ("Helsinki-NLP/opus-mt-tc-big-en-fr", "./models/Helsinki-NLP--opus-mt-tc-big-en-fr")
+        ne_en = ("Helsinki-NLP/opus-mt-tc-big-fr-en", "./models/Helsinki-NLP--opus-mt-tc-big-fr-en")
+    elif language == "russian":
+        en_ne = ("Helsinki-NLP/opus-mt-en-ru", "./models/Helsinki-NLP--opus-mt-en-ru")
+        ne_en = ("Helsinki-NLP/opus-mt-ru-en", "./models/Helsinki-NLP--opus-mt-ru-en")
+    elif language == "german":
+        en_ne = ("Helsinki-NLP/opus-mt-en-de", "./models/Helsinki-NLP--opus-mt-en-de")
+        ne_en = ("Helsinki-NLP/opus-mt-de-en", "./models/Helsinki-NLP--opus-mt-de-en")
+
+    en_ne_tok, en_ne_model = load_translation_model(en_ne[1], en_ne[0])
+    ne_en_tok, ne_en_model = load_translation_model(ne_en[1], ne_en[0])
+
+    _translation_models[language] = (en_ne_tok, en_ne_model, ne_en_tok, ne_en_model)
+    return _translation_models[language]
+
 def load_translation_model(local_dir, hf_name):
     """
     Load translation model from local directory if available, otherwise download from Hugging Face
@@ -72,24 +94,7 @@ def translate_text(text, translate_whole = True, num_modify = None, language = "
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    if language == "french":
-        en_ne_model_name = "Helsinki-NLP/opus-mt-tc-big-en-fr"
-        ne_en_model_name = "Helsinki-NLP/opus-mt-tc-big-fr-en"
-        en_ne_local = "./models/Helsinki-NLP--opus-mt-tc-big-en-fr"
-        ne_en_local = "./models/Helsinki-NLP--opus-mt-tc-big-fr-en"
-    elif language == "russian":
-        en_ne_model_name = "Helsinki-NLP/opus-mt-en-ru"
-        ne_en_model_name = "Helsinki-NLP/opus-mt-ru-en"
-        en_ne_local = "./models/Helsinki-NLP--opus-mt-en-ru"
-        ne_en_local = "./models/Helsinki-NLP--opus-mt-ru-en"
-    elif language == "german":
-        en_ne_model_name = "Helsinki-NLP/opus-mt-en-de"
-        ne_en_model_name = "Helsinki-NLP/opus-mt-de-en"
-        en_ne_local = "./models/Helsinki-NLP--opus-mt-en-de"
-        ne_en_local = "./models/Helsinki-NLP--opus-mt-de-en"
-
-    en_ne_tokenizer, en_ne_model = load_translation_model(en_ne_local, en_ne_model_name)
-    ne_en_tokenizer, ne_en_model = load_translation_model(ne_en_local, ne_en_model_name)
+    en_ne_tokenizer, en_ne_model, ne_en_tokenizer, ne_en_model = get_translation_models(language)
 
     if translate_whole:
         # Translate from English → Target Language
@@ -206,22 +211,30 @@ def mask_modify_text(og_tokenizer, text, num_modify):
 
     for idx in modified_indices:
         original_token = flat_tokens[idx]
+        attempt = 0
         # print(tokenizer.decode(tokenizer.convert_tokens_to_ids(original_token)))
-        flat_tokens[idx] = '[MASK]'
+        new_token = original_token  # start as same so loop runs at least once
 
-        # Encode masked tokens
-        input_ids = tokenizer.encode(flat_tokens, return_tensors='pt')
-        mask_idx = (input_ids == tokenizer.mask_token_id).nonzero(as_tuple=True)[1].item()
+        # keep trying until prediction differs or we hit max attempts
+        while new_token == original_token and attempt < 10:
+            attempt += 1
+            # temporarily mask this token
+            temp_tokens = flat_tokens.copy()
+            temp_tokens[idx] = tokenizer.mask_token
 
-        with torch.no_grad():
-            outputs = model(input_ids)
-            predictions = outputs.logits
+            # encode and locate mask position
+            input_ids = tokenizer.encode(temp_tokens, return_tensors='pt')
+            mask_idx = (input_ids == tokenizer.mask_token_id).nonzero(as_tuple=True)[1].item()
 
-        predicted_token_id = predictions[0, mask_idx].argmax().item()
-        predicted_token = tokenizer.convert_ids_to_tokens([predicted_token_id])[0]
+            with torch.no_grad():
+                outputs = model(input_ids)
+                predictions = outputs.logits
 
-        flat_tokens[idx] = predicted_token
+            # choose most probable replacement
+            predicted_token_id = predictions[0, mask_idx].argmax().item()
+            new_token = tokenizer.convert_ids_to_tokens([predicted_token_id])[0]
 
+        flat_tokens[idx] = new_token  # replace with final prediction
     for i, token in enumerate(flat_tokens):
         line_idx, token_idx = position_map[i]
         tokenized_lines[line_idx][token_idx] = token

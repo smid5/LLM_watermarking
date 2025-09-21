@@ -7,10 +7,109 @@ from matplotlib.ticker import FuncFormatter, LogLocator
 import matplotlib as mpl
 mpl.rcParams["text.usetex"] = False
 
-from .utils import load_llm_config, test_watermark, load_prompts, COLORS
+from .utils import load_llm_config, test_watermark, load_prompts, COLORS, LINESTYLES, KEYS, METHODS
+from collections import defaultdict
 
 # Suppress tokenizer parallelism warning
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+def plot_sentence_length_median_pvalue(sentence_lengths, pvalues, filename):
+    plt.style.use(['science', 'no-latex'])
+    plt.figure(figsize=(10, 4.5))  # wider plot
+    MIN_PVAL = 1e-16
+
+    for (label, values) in pvalues.items():
+        if isinstance(label, tuple):
+            method_name, key_name = label
+            color = COLORS[method_name]
+            linestyle = LINESTYLES[key_name]
+            legend_label = f"{method_name} ({key_name})"
+        else:
+            method_name = label
+            color = COLORS[method_name]
+            linestyle = "-"
+            legend_label = method_name
+
+        clipped_values = [max(v, MIN_PVAL) for v in values]
+        plt.plot(
+            sentence_lengths,
+            clipped_values,
+            marker="o",
+            markersize=7,
+            markeredgecolor="white",
+            markeredgewidth=1,
+            linestyle=linestyle,
+            color=color,
+            linewidth=2,
+            label=legend_label
+        )
+
+    plt.yscale("log")  # Set y-axis to log scale to better capture small variations
+    plt.xscale("linear")
+    yticks = [1e0, 1e-2, 1e-4, 1e-6, 1e-8, 1e-10, 1e-12, 1e-14, MIN_PVAL]
+    plt.yticks(yticks)
+
+    # Format ticks: show "<10^-15" at bottom
+    def custom_y_ticks(val, _):
+        if val <= MIN_PVAL + 1e-20:  # Allow for float imprecision
+            return r"$<10^{-16}$"
+        exponent = int(np.log10(val))
+        return f"$10^{{{exponent}}}$"
+
+    plt.gca().yaxis.set_major_formatter(FuncFormatter(custom_y_ticks))
+    # Labels and ticks
+    plt.xlabel("Sentence Length", fontsize=14)
+    plt.ylabel("Median p-value", fontsize=14)
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
+
+    # Grid
+    plt.grid(True, linestyle="--", alpha=0.6)
+
+    # Legend outside
+    plt.legend(fontsize=11, frameon=False, loc="center left", bbox_to_anchor=(1, 0.5))
+
+    plt.tight_layout()
+    plt.savefig(filename, bbox_inches="tight", dpi=300)
+    plt.close()
+
+def sentence_length_median_pvalue(length_variations, filename, method_names=["ExpMin", "SynthID", "WaterMax"], key_names=["Standard Hashing", "SimHash"], k=4, b=4, seeds=[42], model_name='meta-llama/Meta-Llama-3-8B'):
+    llm_config = load_llm_config(model_name)
+    prompts = load_prompts(filename=filename)
+
+    p_values = defaultdict(dict)
+    if "No Watermark" not in method_names:
+        method_names.append("No Watermark")
+
+    for length in length_variations:
+        applicable_prompts = [p for p in prompts if len(p.split()) < length]
+        if not applicable_prompts:
+            continue
+
+        for method_name in method_names:
+            if method_name == "No Watermark":
+                method = "nomark"
+                detection_name = f"expmin_simhash"
+                p_vals = [test_watermark(
+                    applicable_prompts, length, llm_config, method, detection_name, seed=seed
+                ) for seed in seeds]
+                median_pval = np.median(p_vals)
+                p_values[method_name][length] = median_pval
+
+            else:
+                for key_name in key_names:
+                    method = f"{METHODS[method_name]}_{KEYS[key_name]}"
+
+                    p_vals = [test_watermark(
+                        applicable_prompts, length, llm_config, method, method, seed=seed
+                    ) for seed in seeds]
+                    median_pval = np.median(p_vals)
+                    p_values[(method_name, key_name)][length] = median_pval
+        
+    sorted_lengths = sorted(p_values["No Watermark"].keys())
+    for key in p_values:
+        p_values[key] = [p_values[key][l] for l in sorted_lengths]
+    plot_sentence_length_median_pvalue(sorted_lengths, p_values, f"Figures/sentence_length_vs_pvalue.pdf")
 
 def plot_sentence_length_p_values(sentence_lengths, p_values, filename):
     plt.style.use(['science', 'no-latex'])

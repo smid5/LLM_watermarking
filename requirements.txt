@@ -9,3 +9,5 @@ sentencepiece
 python-Levenshtein
 nltk
 datasets
+python-dotenv
+autoawq

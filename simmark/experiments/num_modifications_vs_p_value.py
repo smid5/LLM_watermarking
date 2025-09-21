@@ -6,64 +6,86 @@ import matplotlib.pyplot as plt
 import scienceplots
 import numpy as np
 
-from .utils import test_watermark, load_llm_config, load_prompts, modify_text, cbcolors, COLORS
+from .utils import load_llm_config, test_watermark, load_prompts, METHODS, COLORS, KEYS, LINESTYLES
+from collections import defaultdict
 
-def plot_p_value_modifications(modifications, p_values_dict, filename, xlabel):
-    plt.style.use(['science'])
-    plt.figure(figsize=(6, 4))
-    
-    # Iterate through each method and plot its data
-    for idx, (label, values) in enumerate(p_values_dict.items()):
-        plt.plot(modifications, values, marker='o', linestyle='-', color=COLORS[label], linewidth=2, label=label)
 
-    plt.yscale("linear")  
-    plt.xlabel(xlabel)
-    plt.ylabel("Percent with p-value below .01")
-    plt.legend()
-    plt.grid()
-    plt.xticks(modifications)
-    plt.savefig(filename)
+def plot_p_value_modifications(modifications, p_values, filename, xlabel):
+    plt.style.use(['science', 'no-latex'])
+    plt.figure(figsize=(10, 4.5))
+
+    for (label, values) in p_values.items():
+        if isinstance(label, tuple):
+            method_name, key_name = label
+            color = COLORS[method_name]
+            linestyle = LINESTYLES[key_name]
+            legend_label = f"{method_name} ({key_name})"
+        else:
+            method_name = label
+            color = COLORS[method_name]
+            linestyle = "-"
+            legend_label = method_name
+
+        plt.plot(
+            modifications,
+            values,
+            marker="o",
+            markersize=7,
+            markeredgecolor="white",
+            markeredgewidth=1,
+            linestyle=linestyle,
+            color=color,
+            linewidth=2,
+            label=legend_label
+        )
+
+    # Labels and ticks
+    plt.xlabel(xlabel, fontsize=14)
+    plt.ylabel("Median of median token-level p-values", fontsize=14)
+    plt.xticks(modifications, fontsize=12)
+    plt.yticks(fontsize=12)
+
+    # Grid
+    plt.grid(True, linestyle="--", alpha=0.6)
+
+    # Legend outside
+    plt.legend(fontsize=11, frameon=False, loc="center left", bbox_to_anchor=(1, 0.5))
+
+    plt.tight_layout()
+    plt.savefig(filename, bbox_inches="tight", dpi=300)
     plt.close()
 
-def generate_p_value_modification_experiment(filename, attack, k=4, b=4, modification_values = list(range(0, 31, 3)), num_tokens=100, seeds=[42]):
-    llm_config = load_llm_config("meta-llama/Llama-3.2-3B")
+def generate_p_value_modification_experiment(modification_values, num_tokens, filename, attack_name, method_names=["ExpMin", "SynthID", "WaterMax"], key_names=["Standard Hashing", "SimHash"], k=4, b=4, seeds=[42], model_name='meta-llama/Meta-Llama-3-8B'):
+    llm_config = load_llm_config(model_name)
     prompts = load_prompts(filename=filename)
-    num_prompts = len(prompts)
     modifications = np.array(modification_values)
-    num_modifications = len(modification_values)
 
-    # Dictionary to store p-values for each method
-    p_values = {
-        "SimMark": np.zeros(num_modifications),
-        "Unigram": np.zeros(num_modifications),
-        "SoftRedList": np.zeros(num_modifications),
-        "ExpMin": np.zeros(num_modifications),
-        "SynthID": np.zeros(num_modifications)
-    }
-    method_names = ["SimMark", "Unigram", "SoftRedList", "ExpMin", "SynthID"]
-    methods = [f"simmark_{k}_{b}", "unigram", "softred", "expmin", "synthid"]
+    p_values = defaultdict(list)
 
-    for i, num_modify in enumerate(modification_values):
+    for num_modify in modification_values:
+        for method_name in method_names:
+            for key_name in key_names:
+                if method_name == "WaterMax":
+                    method = f"{METHODS[method_name]}_{KEYS[key_name]}_{4}_{8}"
+                else:
+                    method = f"{METHODS[method_name]}_{KEYS[key_name]}_{k}_{b}"
+                print(f"Evaluating {method} with {attack_name} attack and {num_modify} modifications")
 
-        # Compute p-values for each method
-        threshold = 1e-2
+                p_vals = [test_watermark(
+                    prompts, num_tokens, llm_config, method, method, f"{attack_name}_{num_modify}", seed=seed
+                ) for seed in seeds]
+                median_pval = np.median(p_vals)
+                p_values[(method_name, key_name)].append(median_pval)
 
-        for method_name, method in zip(method_names, methods):
-            results = np.empty((0, num_prompts))
-            for seed in seeds:
-                new_data = np.array(test_watermark(
-                    prompts, num_tokens, llm_config, method, method, f"{attack}_{num_modify}", seed=seed
-                ))
-                results = np.vstack([results, new_data])
-            p_values[method_name][i] = np.mean(results<threshold)*100
-
-    save_filename = f"figures/p_value_vs_{attack}_attack_k{k}_b{b}.pdf"
-    if attack=="duplicate":
+    save_filename = f"Figures/p_value_vs_{attack_name}_attack_k{k}_b{b}.pdf"
+    if attack_name=="duplicate":
         xlabel="Number of Related Word Insertions"
-    elif attack=="modify":
+    elif attack_name=="modify":
         xlabel="Number of Unrelated Word Replacements"
-    elif attack=="translate":
+    elif attack_name=="translate":
         xlabel="Number of Translated Word Replacements"
+    elif attack_name=="mask":
+        xlabel="Number of Masked Word Replacements"
     else:
         xlabel="Number of Word Modifications"
     # Generate plot

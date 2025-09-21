@@ -5,10 +5,10 @@ import scienceplots
 import pandas as pd
 import numpy as np
 
-from .utils import load_llm_config, test_watermark, load_prompts, cbcolors, linestyles, METHODS
+from .utils import load_llm_config, test_watermark, load_prompts, cbcolors, linestyles, METHODS, KEYS
 
-def translation_p_value_violin(filename, k=4, b=4, num_tokens=100):
-    llm_config = load_llm_config('facebook/opt-125m')
+def translation_p_value_violin(filename, k=4, b=4, num_tokens=100, model_name='meta-llama/Meta-Llama-3-8B'):
+    llm_config = load_llm_config(model_name)
 
     prompts = load_prompts(filename=filename)
 
@@ -66,30 +66,29 @@ def translation_p_value_violin(filename, k=4, b=4, num_tokens=100):
     plt.grid(True, which="both", linestyle="--", linewidth=0.5)
     plt.savefig(f"Figures/translation_p_val_dist_{k}_{b}_{num_tokens}.pdf")
 
-def plot_p_value_dist_translation(method_name, num_tokens, filename, k=4, b=4):
-    llm_config = load_llm_config('facebook/opt-125m')
+def plot_p_value_dist_translation(method_name, key_name, num_tokens, filename, k=4, b=4, seeds=[42], model_name='meta-llama/Meta-Llama-3-8B'):
+    llm_config = load_llm_config(model_name)
     prompts = load_prompts(filename=filename)
 
-    method = f"simmark_{k}_{b}" if method_name == "SimMark" else METHODS[method_name]
-
-    detection_name = method
+    method = f"{METHODS[method_name]}_{KEYS[key_name]}_{k}_{b}"
+    detection_name = method  # Using the same method for detection
 
     p_values = {}
 
     # Generate without watermark, no attack, and detection
-    p_values['No Watermark'] = test_watermark(
-        prompts, num_tokens, llm_config, "nomark", detection_name
-    )
+    p_values['No Watermark'] = [test_watermark(
+        prompts, num_tokens, llm_config, "nomark", detection_name, seed=seed
+    ) for seed in seeds]
 
     # Generate with simhash watermark, no attack, and detection
-    p_values[method_name] = test_watermark(
-        prompts, num_tokens, llm_config, method, detection_name
-    )
+    p_values[f"{method_name} ({key_name})"] = [test_watermark(
+        prompts, num_tokens, llm_config, method, detection_name, seed=seed
+    ) for seed in seeds]
 
     # Generate with watermark, with attack, and detection
-    p_values[f'{method_name} + Translation'] = test_watermark(
-        prompts, num_tokens, llm_config, method, detection_name, "translate"
-    )
+    p_values[f'{method_name} ({key_name}) + Translation'] = [test_watermark(
+        prompts, num_tokens, llm_config, method, detection_name, "translate", seed=seed
+    ) for seed in seeds]
 
     plt.style.use(['science', 'no-latex'])
     plt.figure(figsize=(4, 3))

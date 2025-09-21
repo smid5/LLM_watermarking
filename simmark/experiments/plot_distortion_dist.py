@@ -3,7 +3,92 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import scienceplots
 
-from .utils import load_llm_config, test_distortion, load_prompts, METHODS, COLORS
+from .utils import load_llm_config, test_distortion, load_prompts, METHODS, COLORS, KEYS, LINESTYLES
+from collections import defaultdict
+import numpy as np
+
+def plot_sentence_length_median_distortion(sentence_lengths, distortions, filename):
+    plt.style.use(['science', 'no-latex'])
+    plt.figure(figsize=(10, 4.5))  # wider plot
+
+    for (label, values) in distortions.items():
+        if isinstance(label, tuple):
+            method_name, key_name = label
+            color = COLORS[method_name]
+            linestyle = LINESTYLES[key_name]
+            legend_label = f"{method_name} ({key_name})"
+        else:
+            method_name = label
+            color = COLORS[method_name]
+            linestyle = "-"
+            legend_label = method_name
+
+        plt.plot(
+            sentence_lengths,
+            values,
+            marker="o",
+            markersize=7,
+            markeredgecolor="white",
+            markeredgewidth=1,
+            linestyle=linestyle,
+            color=color,
+            linewidth=2,
+            label=legend_label
+        )
+
+    # Labels and ticks
+    plt.xlabel("Sentence Length", fontsize=14)
+    plt.ylabel("Median Distortion", fontsize=14)
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
+
+    # Grid
+    plt.grid(True, linestyle="--", alpha=0.6)
+
+    # Legend outside
+    plt.legend(fontsize=11, frameon=False, loc="center left", bbox_to_anchor=(1, 0.5))
+
+    plt.tight_layout()
+    plt.savefig(filename, bbox_inches="tight", dpi=300)
+    plt.close()
+
+def sentence_length_median_distortion(length_variations, filename, method_names=["ExpMin", "SynthID", "WaterMax"], key_names=["Standard Hashing", "SimHash"], k=4, b=4, seeds=[42], model_name='meta-llama/Meta-Llama-3-8B'):
+    llm_config = load_llm_config(model_name)
+    prompts = load_prompts(filename=filename)
+
+    distortions = defaultdict(dict)
+    if "No Watermark" not in method_names:
+        method_names.append("No Watermark")
+
+    for length in length_variations:
+        applicable_prompts = [p for p in prompts if len(p.split()) < length]
+        if not applicable_prompts:
+            continue
+
+        for method_name in method_names:
+            if method_name == "No Watermark":
+                method = "nomark"
+                detection_name = f"expmin_simhash"
+                distortion_vals = [test_distortion(
+                    applicable_prompts, length, llm_config, method, detection_name, seed=seed
+                ) for seed in seeds]
+                median_distortion = np.median(distortion_vals)
+                distortions[method_name][length] = median_distortion
+
+            else:
+                for key_name in key_names:
+                    method = f"{METHODS[method_name]}_{KEYS[key_name]}"
+
+                    distortion_vals = [test_distortion(
+                        applicable_prompts, length, llm_config, method, method, seed=seed
+                    ) for seed in seeds]
+                    median_distortion = np.median(distortion_vals)
+                    distortions[(method_name, key_name)][length] = median_distortion
+        
+    sorted_lengths = sorted(distortions["No Watermark"].keys())
+    for key in distortions:
+        distortions[key] = [distortions[key][l] for l in sorted_lengths]
+    plot_sentence_length_median_distortion(sorted_lengths, distortions, f"Figures/sentence_length_vs_distortion.pdf")
 
 def plot_distortion_dist(num_tokens, filename, k=4, b=4):
     llm_config = load_llm_config('facebook/opt-125m')

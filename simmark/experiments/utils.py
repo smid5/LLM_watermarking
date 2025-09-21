@@ -5,6 +5,10 @@ from transformers import LogitsProcessorList, TemperatureLogitsWarper, TopKLogit
 import torch
 import numpy as np
 from sentence_transformers import SentenceTransformer
+import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+from dotenv import load_dotenv
+from ..methods.seeding import simhash_seed, normal_seed, no_hash_seed
 
 linestyles = ['dotted', 'solid', 'dashed', 'dashdot', (5,(10,3)), (0,(1,1)), (0,(5,10)),(0,(5,1)), (0,(3,10,1,10)), (0,(3,5,1,5)), (0,(3,1,1,1)), (0,(3,5,1,5,1,5)), (0,(3,10,1,10,1,10)), (0,(3,1,1,1,1,1))]
 
@@ -24,17 +28,18 @@ cbcolors = [
 
 COLORS = {
     "SimMark": "#1f77b4",  # blue
-    "ExpMin": "#ff7f0e",  # orange
+    "ExpMin": "#1f77b4",  # orange
     "SoftRedList": "#2ca02c",  # green
     "Unigram": "#d62728",  # red
-    "SynthID": "#ff6ec7",  # pink
+    "SynthID": "#ff7f0e",  # pink
     "No Watermark": "#8c564b",  # brown
     "SimSoftRed": "#00FFFF", # cyan
     "SimSynthID": "#9467bd",  # purple
     "ExpMin (standard)": "#ff7f0e",  # orange
-    "ExpMin (Simhash)": "#1f77b4",  # blue
+    "ExpMin (Simhash)": "#232426",  # blue
     "SynthID (standard)": "#ff6ec7",  # pink
     "SynthID (Simhash)": "#d62728",  # red
+    "WaterMax": "#e377c2",  # magenta
 }
 
 METHODS = {
@@ -45,7 +50,20 @@ METHODS = {
     "SynthID": "synthid",
     "No Watermark": "nomark",
     "SimSoftRed": "simsoftred",
-    "SimSynthID": "simsynthid"
+    "SimSynthID": "simsynthid",
+    "WaterMax": "watermax"
+}
+
+KEYS = {
+    "Standard Hashing": "standard",
+    "SimHash": "simhash",
+    "No Hashing": "nohash"
+}
+
+LINESTYLES = {
+    "Standard Hashing": "-",
+    "SimHash": "--",
+    "No Hashing": ":"
 }
 
 def load_prompts(filename):
@@ -66,15 +84,37 @@ def load_llm_config(model_name):
             "tokenizer": tokenizer,
             "vocab_size": 50272
         }
-    elif model_name == "meta-llama/Llama-3.2-3B":
-        hf_token = "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"
+    elif model_name == "meta-llama/Llama-3.2-3B" or model_name == "meta-llama/Meta-Llama-3-8B":
+        load_dotenv()  # load .env file
+        hf_token = os.getenv("HF_TOKEN")
         device = "cuda" if torch.cuda.is_available() else "cpu"
         from transformers import AutoModelForCausalLM, AutoTokenizer
         model = AutoModelForCausalLM.from_pretrained(model_name, 
                                                      token=hf_token,
-                                                     torch_dtype="auto").to(device)
+                                                     torch_dtype=torch.float16).to(device)
         tokenizer = AutoTokenizer.from_pretrained(model_name, token=hf_token)
         tokenizer.pad_token = tokenizer.eos_token
+        return {
+            "model": model,
+            "tokenizer": tokenizer,
+            "vocab_size": model.config.vocab_size
+        }
+    elif model_name == "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4":
+        load_dotenv()  # load .env file
+        hf_token = os.getenv("HF_TOKEN")
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            device_map={"": "cuda"},
+            torch_dtype=torch.float16
+        )
+
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        tokenizer.pad_token = tokenizer.eos_token
+
         return {
             "model": model,
             "tokenizer": tokenizer,
@@ -87,8 +127,15 @@ def extract_watermark_config(generation_name, watermark_config):
     parts = generation_name.split("_")
     method = parts[0]
     watermark_config['method'] = method
-    isSimHash = parts[1] == "simhash" if len(parts) > 1 else False
-    watermark_config['isSimHash'] = isSimHash
+    seed_type = parts[1] if len(parts) > 1 else "simhash"
+    if seed_type == "simhash":
+        watermark_config['seed_function'] = simhash_seed
+    elif seed_type == "standard":
+        watermark_config['seed_function'] = normal_seed
+    elif seed_type == "nohash":
+        watermark_config['seed_function'] = no_hash_seed
+    else:
+        raise ValueError(f"Unknown seed type: {seed_type}")
     if method == "expmin":
         k = 4
         b = 4
@@ -127,6 +174,17 @@ def extract_watermark_config(generation_name, watermark_config):
         if '_' in generation_name:
             n_gram = int(generation_name.split('_')[1])
         watermark_config['n_gram'] = n_gram
+    elif method == "watermax":
+        k = 4
+        b = 8
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        if len(parts)>3:
+            k = int(parts[2])
+            b = int(parts[3])
+        watermark_config['k'] = k
+        watermark_config['b'] = b
+        watermark_config['transformer_model'] = SentenceTransformer('all-MiniLM-L6-v2').to(device)
+        watermark_config['prior_tokens'] = 8
     elif method == "unigram": pass
     elif method == "nomark": pass
     else:
@@ -419,25 +477,29 @@ def test_distortion(prompts, num_tokens, llm_config, generation_name, detection_
             f.write(str(distortion_output) + '\n')
 
     return perplexity_list
-        
-def sentence_perplexity(prompt, generated_text, llm_config):
+
+import torch.nn.functional as F
+def sentence_perplexity(prompt, generated_text, llm_config, eps=1e-12):
     model = llm_config['model']
     tokenizer = llm_config['tokenizer']
     device = next(model.parameters()).device
 
-    ids = llm_config['tokenizer'].encode(generated_text, return_tensors="pt").squeeze().to(device)
-    input_ids = llm_config['tokenizer'].encode(prompt, return_tensors="pt").squeeze().to(device)
-    token_probs = []
+    ids = tokenizer.encode(generated_text, return_tensors="pt").squeeze().to(device)
+    input_ids = tokenizer.encode(prompt, return_tensors="pt").squeeze().to(device)
+    token_log_probs = []
 
     while len(input_ids) != len(ids):
         with torch.no_grad():
-            input_text = llm_config['tokenizer'].decode(input_ids, skip_special_tokens=True)
-            input_tensor = llm_config['tokenizer'](input_text, return_tensors="pt")["input_ids"].to(device)
-            original_logits = llm_config['model'](input_tensor).logits
-            original_probs = torch.softmax(original_logits[0,-1,:], dim=-1)
-            token_probs.append(torch.log(original_probs[ids[len(input_ids)].item()]))
+            input_text = tokenizer.decode(input_ids, skip_special_tokens=True)
+            input_tensor = tokenizer(input_text, return_tensors="pt")["input_ids"].to(device)
+            logits = model(input_tensor).logits
+            log_probs = F.log_softmax(logits[0, -1, :], dim=-1)
+
+            target_id = ids[len(input_ids)].item()
+            token_log_probs.append(log_probs[target_id].clamp(min=np.log(eps)))
 
             input_ids = torch.cat((input_ids, ids[len(input_ids)].unsqueeze(0)))
 
-    perplexity = np.exp(-torch.stack(token_probs).cpu().mean().item())
+    avg_log_prob = torch.stack(token_log_probs).mean().item()
+    perplexity = float(np.exp(-avg_log_prob))
     return perplexity
