@@ -1,0 +1,12 @@
+TPR for ExpMin (Standard) under 15 modify attacks: 0.7
+TPR for ExpMin (Standard) under 30 modify attacks: 0.55
+TPR for ExpMin (SimKey) under 15 modify attacks: 0.775
+TPR for ExpMin (SimKey) under 30 modify attacks: 0.575
+TPR for SynthID (Standard) under 15 modify attacks: 0.925
+TPR for SynthID (Standard) under 30 modify attacks: 0.825
+TPR for SynthID (SimKey) under 15 modify attacks: 0.975
+TPR for SynthID (SimKey) under 30 modify attacks: 0.725
+TPR for WaterMax (Standard) under 15 modify attacks: 0.725
+TPR for WaterMax (Standard) under 30 modify attacks: 0.5
+TPR for WaterMax (SimKey) under 15 modify attacks: 0.75
+TPR for WaterMax (SimKey) under 30 modify attacks: 0.625

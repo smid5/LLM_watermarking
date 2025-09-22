@@ -12,9 +12,9 @@ from simmark.experiments.num_modifications_vs_tpr import generate_tpr_modificati
 
 filename = 'data/prompts.txt'
 num_tokens = 100
-seeds = [42, 0]
-model_name="hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4"
-# model_name='meta-llama/Meta-Llama-3-8B'
+seeds = [42]
+# model_name="hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4"
+model_name='meta-llama/Meta-Llama-3-8B'
 
 # # Define the range of k and b values
 # k_values = [5, 10, 15, 20]
@@ -51,24 +51,24 @@ model_name="hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4"
 # generate_robustness_vs_distortion(filename, num_tokens)
 # generate_robustness_vs_distortion(filename, num_tokens, attack_name="translate")
 
-# plot_p_value_dist_translation("WaterMax", "SimHash", num_tokens, filename, b=8, seeds=seeds, model_name=model_name)
-# plot_p_value_dist_translation("WaterMax", "Standard Hashing", num_tokens, filename, b=8, seeds=seeds, model_name=model_name)
-# plot_p_value_dist_translation("ExpMin", "SimHash", num_tokens, filename, seeds=seeds, model_name=model_name)
-# plot_p_value_dist_translation("ExpMin", "Standard Hashing", num_tokens, filename, seeds=seeds, model_name=model_name)
-# plot_p_value_dist_translation("SynthID", "SimHash", num_tokens, filename, seeds=seeds, model_name=model_name)
-# plot_p_value_dist_translation("SynthID", "Standard Hashing", num_tokens, filename, seeds=seeds, model_name=model_name)
+# plot_p_value_dist_translation("WaterMax", "SimKey", num_tokens, filename, b=4, seeds=seeds, model_name=model_name)
+# plot_p_value_dist_translation("WaterMax", "Standard", num_tokens, filename, b=4, seeds=seeds, model_name=model_name)
+# plot_p_value_dist_translation("ExpMin", "SimKey", num_tokens, filename, seeds=seeds, model_name=model_name)
+# plot_p_value_dist_translation("ExpMin", "Standard", num_tokens, filename, seeds=seeds, model_name=model_name)
+# plot_p_value_dist_translation("SynthID", "SimKey", num_tokens, filename, seeds=seeds, model_name=model_name)
+# plot_p_value_dist_translation("SynthID", "Standard", num_tokens, filename, seeds=seeds, model_name=model_name)
 
 length_variations = list(range(25, 105, 5))
 # sentence_length_median_distortion(length_variations, filename, seeds=seeds, model_name=model_name)
 # sentence_length_median_pvalue(length_variations, filename, seeds=seeds, model_name=model_name)
 
-method_names = ["ExpMin", "SynthID"]
+method_names = ["ExpMin", "SynthID", "WaterMax"]
 modification_values = list(range(15, 31, 15))
 # generate_p_value_modification_experiment(modification_values, num_tokens, filename, attack_name="modify", method_names=method_names, seeds=seeds, model_name=model_name)
 # generate_p_value_modification_experiment(modification_values, num_tokens, filename, attack_name="translate", method_names=method_names, seeds=seeds, model_name=model_name)
 # generate_p_value_modification_experiment(modification_values, num_tokens, filename, attack_name="mask", seeds=seeds, model_name=model_name)
 
 unwm_seeds = [42, 0, 1]
-# generate_tpr_modification_experiment(modification_values, num_tokens, filename, attack_name="modify", method_names=method_names, fpr=1e-2, unwm_seeds=unwm_seeds, wm_seeds=seeds, model_name=model_name)
+# generate_tpr_modification_experiment(modification_values, num_tokens, filename, attack_name="modify", method_names=method_names, fpr=1e-2, unwm_seeds=unwm_seeds, wm_seeds=seeds, model_name=model_name, output_log_file=True)
 # generate_tpr_modification_experiment(modification_values, num_tokens, filename, attack_name="translate", method_names=method_names, fpr=1e-2, unwm_seeds=unwm_seeds, wm_seeds=seeds, model_name=model_name)
 generate_tpr_modification_experiment(modification_values, num_tokens, filename, attack_name="mask", method_names=method_names, fpr=1e-2, unwm_seeds=unwm_seeds, wm_seeds=seeds, model_name=model_name)

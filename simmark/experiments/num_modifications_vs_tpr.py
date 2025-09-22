@@ -56,7 +56,7 @@ def plot_tpr_modifications(modifications, tprs, filename, xlabel, fpr):
     plt.savefig(filename, bbox_inches="tight", dpi=300)
     plt.close()
 
-def generate_tpr_modification_experiment(modification_values, num_tokens, filename, attack_name, method_names=["ExpMin", "SynthID", "WaterMax"], key_names=["Standard Hashing", "SimHash"], fpr= 1e-3, k=4, b=4, wm_seeds=[42], unwm_seeds=[42], model_name='meta-llama/Meta-Llama-3-8B'):
+def generate_tpr_modification_experiment(modification_values, num_tokens, filename, attack_name, method_names=["ExpMin", "SynthID", "WaterMax"], key_names=["Standard", "SimKey"], fpr= 1e-3, k=4, b=4, wm_seeds=[42], unwm_seeds=[42], model_name='meta-llama/Meta-Llama-3-8B', output_log_file=False):
     llm_config = load_llm_config(model_name)
     prompts = load_prompts(filename=filename)
     modifications = np.array(modification_values)
@@ -66,10 +66,7 @@ def generate_tpr_modification_experiment(modification_values, num_tokens, filena
 
     for method_name in method_names:
         for key_name in key_names:
-            if method_name == "WaterMax":
-                method = f"{METHODS[method_name]}_{KEYS[key_name]}_{4}_{8}"
-            else:
-                method = f"{METHODS[method_name]}_{KEYS[key_name]}_{k}_{b}"
+            method = f"{METHODS[method_name]}_{KEYS[key_name]}_{k}_{b}"
             pvals_unwm[(method_name, key_name)] = [test_watermark(
                 prompts, num_tokens, llm_config, "nomark", method, seed=seed
             ) for seed in unwm_seeds]
@@ -77,16 +74,13 @@ def generate_tpr_modification_experiment(modification_values, num_tokens, filena
     for num_modify in modification_values:
         for method_name in method_names:
             for key_name in key_names:
-                if method_name == "WaterMax":
-                    method = f"{METHODS[method_name]}_{KEYS[key_name]}_{4}_{8}"
-                else:
-                    method = f"{METHODS[method_name]}_{KEYS[key_name]}_{k}_{b}"
+                method = f"{METHODS[method_name]}_{KEYS[key_name]}_{k}_{b}"
                 print(f"Evaluating {method} with {attack_name} attack and {num_modify} modifications")
 
                 p_vals = [test_watermark(
                     prompts, num_tokens, llm_config, method, method, f"{attack_name}_{num_modify}", seed=seed
                 ) for seed in wm_seeds]
-                tpr, _ = compute_tpr(p_vals, pvals_unwm[(method_name, key_name)], fpr)
+                tpr, _ = compute_tpr(pvals_unwm[(method_name, key_name)], p_vals, fpr)
                 tprs[(method_name, key_name)].append(tpr)
 
     save_filename = f"Figures/tpr_vs_{attack_name}_attack_k{k}_b{b}.pdf"
@@ -102,3 +96,9 @@ def generate_tpr_modification_experiment(modification_values, num_tokens, filena
         xlabel="Number of Word Modifications"
     # Generate plot
     plot_tpr_modifications(modifications, tprs, save_filename, xlabel, fpr)
+    if output_log_file:
+        log_filename = f"logs/tpr_vs_attack_k{k}_b{b}.txt"
+        with open(log_filename, "w") as f:
+            for (method_name, key_name), tpr_values in tprs.items():
+                for tpr_value, num_modify in zip(tpr_values, modification_values):
+                    f.write(f"TPR for {method_name} ({key_name}) under {num_modify} {attack_name} attacks: {tpr_value}\n")

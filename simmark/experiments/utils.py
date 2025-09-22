@@ -55,14 +55,14 @@ METHODS = {
 }
 
 KEYS = {
-    "Standard Hashing": "standard",
-    "SimHash": "simhash",
+    "Standard": "standard",
+    "SimKey": "simhash",
     "No Hashing": "nohash"
 }
 
 LINESTYLES = {
-    "Standard Hashing": "-",
-    "SimHash": "--",
+    "Standard": "--",
+    "SimKey": "-",
     "No Hashing": ":"
 }
 
